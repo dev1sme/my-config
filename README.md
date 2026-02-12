@@ -27,48 +27,109 @@ git clone https://github.com/dev1sme/my-config.git
 cd my-config
 ```
 
-### 2. Cài đặt Zsh + Oh My Zsh
+### 2. Cài đặt theo module
+
+<details>
+<summary><strong>🐚 Zsh + Oh My Zsh</strong></summary>
+
+#### Chạy
 
 ```bash
 ./zsh/setup.sh
 ```
 
-**Bao gồm:**
+#### Mô tả
 
-- Cài đặt Zsh và đặt làm default shell
-- Cài đặt Oh My Zsh
-- Cài đặt fzf
-- Cài đặt plugins:
-  - `git` - Git aliases & functions
-  - `zsh-autosuggestions` - Gợi ý command
-  - `zsh-syntax-highlighting` - Highlight cú pháp
-  - `docker` - Docker autocompletion
-  - `docker-compose` - Docker Compose autocompletion
-  - `history` - Tìm kiếm history
-  - `rsync` - Rsync aliases
-  - `safe-paste` - Chống paste nhầm
-  - `fzf` - Fuzzy finder
-- Theme: **strug**
-- Copy file `.zshrc` vào `$HOME`
+Cài đặt Zsh shell, Oh My Zsh framework và các plugin hỗ trợ, đặt Zsh làm default shell.
 
-### 3. Cài đặt Docker Engine
+#### Bao gồm
+
+| Thành phần | Chi tiết                        |
+| ---------- | ------------------------------- |
+| Zsh        | Cài đặt & đặt làm default shell |
+| Oh My Zsh  | Framework quản lý cấu hình Zsh  |
+| fzf        | Fuzzy finder (binary + plugin)  |
+| Theme      | **strug**                       |
+
+#### Plugins
+
+| Plugin                    | Loại     | Mô tả                             |
+| ------------------------- | -------- | --------------------------------- |
+| `git`                     | built-in | Git aliases & functions           |
+| `zsh-autosuggestions`     | external | Gợi ý command dựa trên history    |
+| `zsh-syntax-highlighting` | external | Highlight cú pháp trên terminal   |
+| `docker`                  | built-in | Docker autocompletion             |
+| `docker-compose`          | built-in | Docker Compose autocompletion     |
+| `history`                 | built-in | Tìm kiếm history nâng cao         |
+| `rsync`                   | built-in | Rsync aliases                     |
+| `safe-paste`              | built-in | Chống chạy nhầm khi paste command |
+| `fzf`                     | built-in | Fuzzy finder integration          |
+
+#### Files
+
+| File           | Mô tả                                       |
+| -------------- | ------------------------------------------- |
+| `zsh/setup.sh` | Script cài đặt tự động                      |
+| `zsh/.zshrc`   | File cấu hình, được copy vào `$HOME/.zshrc` |
+
+</details>
+
+<details>
+<summary><strong>🐳 Docker Engine</strong></summary>
+
+#### Chạy
 
 ```bash
 ./docker/setup.sh
 ```
 
-**Bao gồm:**
+#### Mô tả
 
-- Gỡ các package Docker cũ/không chính thức
-- Thêm Docker official GPG key & repository
-- Cài đặt Docker Engine, Docker CLI, Containerd
-- Cài đặt Docker Buildx & Docker Compose v2
-- Thêm user vào group `docker` (chạy không cần sudo)
-- Bật Docker service tự khởi động
+Cài đặt Docker Engine từ official repository, bao gồm Docker Compose v2 plugin.
 
-**Hỗ trợ:** Ubuntu, Debian, Linux Mint, Pop!\_OS, Fedora, CentOS, RHEL, Rocky, Alma
+> ⚠️ Không chạy với `sudo`. Script sẽ tự gọi `sudo` khi cần.
 
-### 4. Cài đặt VS Code
+#### Bao gồm
+
+| Thành phần        | Package                 |
+| ----------------- | ----------------------- |
+| Docker Engine     | `docker-ce`             |
+| Docker CLI        | `docker-ce-cli`         |
+| Containerd        | `containerd.io`         |
+| Docker Buildx     | `docker-buildx-plugin`  |
+| Docker Compose v2 | `docker-compose-plugin` |
+
+#### Quy trình cài đặt
+
+1. Gỡ các package Docker cũ / không chính thức
+2. Cài đặt dependencies (`ca-certificates`, `curl`, `gnupg`)
+3. Thêm Docker official GPG key & apt repository
+4. Cài đặt Docker Engine + plugins
+5. Thêm user hiện tại vào group `docker`
+6. Bật Docker service tự khởi động (`systemctl enable`)
+7. Chạy test `hello-world` để kiểm tra
+
+#### Distro hỗ trợ
+
+| Debian-based | RPM-based    |
+| ------------ | ------------ |
+| Ubuntu       | Fedora       |
+| Debian       | CentOS       |
+| Linux Mint   | RHEL         |
+| Pop!\_OS     | Rocky / Alma |
+
+#### Files
+
+| File              | Mô tả                  |
+| ----------------- | ---------------------- |
+| `docker/setup.sh` | Script cài đặt tự động |
+
+</details>
+
+<details>
+<summary><strong>💻 VS Code</strong></summary>
+
+#### Chạy
 
 ```bash
 # Cài tất cả (extensions + settings)
@@ -80,22 +141,52 @@ cd my-config
 # Chỉ copy settings
 ./vscode/setup.sh --settings
 
-# Export danh sách extensions hiện tại
+# Export danh sách extensions hiện tại ra file
 ./vscode/setup.sh --export
 ```
 
-**Extensions đã cấu hình (35 extensions):**
+#### Mô tả
 
-| Nhóm          | Extensions                                               |
-| ------------- | -------------------------------------------------------- |
-| AI & Copilot  | Claude Code, GitHub Copilot Chat                         |
-| Java & Spring | Java Extension Pack, Spring Boot Dev Pack, Gradle, Maven |
-| Python        | Python, Pylance, Debugpy, Python Environments            |
-| Web Dev       | ESLint, Prettier, Live Server                            |
-| Docker        | Docker, Docker Explorer, VS Code Containers              |
-| Database      | SQLTools (MySQL, PostgreSQL), MongoDB, Redis             |
-| Git           | GitLens                                                  |
-| Theme & UI    | Dracula Theme Soft, Material Icon Theme, Guides          |
+Cài đặt 35 extensions và apply file `setting.json` vào VS Code. Tự động backup settings cũ trước khi ghi đè.
+
+#### Extensions (35)
+
+| Nhóm          | Extensions                                                                                                                                                                                                                                                                                           |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AI & Copilot  | `anthropic.claude-code`, `github.copilot-chat`                                                                                                                                                                                                                                                       |
+| Java & Spring | `redhat.java`, `vscjava.vscode-java-pack`, `vscjava.vscode-java-debug`, `vscjava.vscode-java-dependency`, `vscjava.vscode-java-test`, `vscjava.vscode-maven`, `vmware.vscode-boot-dev-pack`, `vmware.vscode-spring-boot`, `vscjava.vscode-spring-boot-dashboard`, `vscjava.vscode-spring-initializr` |
+| Gradle        | `vscjava.vscode-gradle`, `naco-siren.gradle-language`, `richardwillis.vscode-gradle-extension-pack`                                                                                                                                                                                                  |
+| Python        | `ms-python.python`, `ms-python.vscode-pylance`, `ms-python.debugpy`, `ms-python.vscode-python-envs`                                                                                                                                                                                                  |
+| Web Dev       | `dbaeumer.vscode-eslint`, `esbenp.prettier-vscode`, `ritwickdey.liveserver`                                                                                                                                                                                                                          |
+| Docker        | `docker.docker`, `ms-azuretools.vscode-docker`, `ms-azuretools.vscode-containers`                                                                                                                                                                                                                    |
+| Database      | `mtxr.sqltools`, `mtxr.sqltools-driver-mysql`, `mtxr.sqltools-driver-pg`, `mongodb.mongodb-vscode`, `redis.redis-for-vscode`, `inferrinizzard.prettier-sql-vscode`                                                                                                                                   |
+| Git           | `eamodio.gitlens`                                                                                                                                                                                                                                                                                    |
+| Theme & UI    | `dracula-theme.theme-dracula`, `pkief.material-icon-theme`, `spywhere.guides`                                                                                                                                                                                                                        |
+
+#### Settings chính
+
+| Cấu hình                 | Giá trị             |
+| ------------------------ | ------------------- |
+| Theme                    | Dracula Theme Soft  |
+| Icon Theme               | Material Icon Theme |
+| Auto Save                | Sau 1 giây          |
+| Format On Save           | Bật                 |
+| Java Formatter           | Red Hat             |
+| JS/TS/React Formatter    | Prettier            |
+| ESLint Fix On Save       | Bật                 |
+| Organize Imports On Save | Bật                 |
+| Terminal Font Size       | 10                  |
+| Cursor Animation         | Smooth              |
+
+#### Files
+
+| File                    | Mô tả                   |
+| ----------------------- | ----------------------- |
+| `vscode/setup.sh`       | Script cài đặt tự động  |
+| `vscode/extensions.txt` | Danh sách extension IDs |
+| `vscode/setting.json`   | File cấu hình VS Code   |
+
+</details>
 
 ## ⚡ Setup nhanh (tất cả)
 

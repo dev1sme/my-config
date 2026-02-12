@@ -1,0 +1,71 @@
+{
+  // Bật tính năng gợi ý chỉnh sửa tiếp theo của GitHub Copilot
+  "github.copilot.nextEditSuggestions.enabled": true,
+
+  // Cấu hình AI model cho GitLens sử dụng mô hình từ VSCode
+  "gitlens.ai.model": "vscode",
+  // Chỉ định model cụ thể: GPT-4.1 thông qua Copilot
+  "gitlens.ai.vscode.model": "copilot:gpt-4.1",
+
+  // Giao diện & Hiển thị
+  "workbench.iconTheme": "material-icon-theme", // Bộ icon Material cho files/folders
+  "terminal.integrated.fontSize": 10, // Cỡ chữ trong terminal
+  "workbench.colorTheme": "Dracula Theme Soft", // Theme màu sắc Dracula
+  "guides.active.width": 3, // Độ rộng của đường indent guide đang hoạt động
+
+  // Cấu hình Spring Boot: chỉ hiển thị HINT cho các property không xác định trong YAML
+  "spring-boot.ls.problem.application-yaml.YAML_UNKNOWN_PROPERTY": "HINT",
+
+  // Hiển thị các phiên chat theo chiều dọc (stacked)
+  "chat.viewSessions.orientation": "stacked",
+  // Đặt Claude Code ở panel phía dưới
+  "claudeCode.preferredLocation": "panel",
+  // Hiển thị menu bar ở chế độ compact (thu gọn)
+  "window.menuBarVisibility": "compact",
+
+  // Cấu hình Docker & Container
+  "containers.containerClient": "com.microsoft.visualstudio.containers.docker", // Sử dụng Docker client
+  "containers.orchestratorClient": "com.microsoft.visualstudio.orchestrators.dockercompose", // Sử dụng Docker Compose
+
+  // Cấu hình GitHub Copilot cho các loại file
+  "github.copilot.enable": {
+    "*": true, // Bật cho tất cả các loại file
+    "plaintext": true, // Bật cho file text thường
+    "markdown": true, // Bật cho file Markdown
+    "scminput": false // Tắt cho ô nhập commit message
+  },
+
+  // Cấu hình con trỏ & Hiệu ứng
+  "editor.overtypeCursorStyle": "line", // Kiểu con trỏ dạng line khi ở chế độ overtype
+  "terminal.integrated.cursorStyle": "line", // Kiểu con trỏ dạng line trong terminal
+  "editor.cursorSmoothCaretAnimation": "on", // Bật hiệu ứng di chuyển con trỏ mượt mà
+
+  "files.autoSave": "afterDelay", // Tự động lưu sau một khoảng thời gian
+  "files.autoSaveDelay": 1000, // Tự động lưu sau 1 giây
+  "editor.formatOnSave": true, // Tự động format code khi lưu
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": "explicit", // Tự động sắp xếp import khi lưu
+    "source.fixAll.eslint": "always", // Tự động sửa lỗi ESLint khi lưu
+    "source.fixAll.prettier": "explicit" // Tự động sửa lỗi Prettier khi lưu
+  },
+
+  // ===== JAVA (Microsoft formatter) =====
+  "[java]": {
+    "editor.defaultFormatter": "redhat.java",
+    "editor.formatOnSave": true
+  },
+
+  // ===== REACT / TS / JS =====
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[javascriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  }
+}

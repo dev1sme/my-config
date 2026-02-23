@@ -68,13 +68,13 @@ Tạo SSH key pair, cấu hình `~/.ssh/config`, thêm key vào `ssh-agent` và 
 
 | Bước | Script hỏi                               | Mặc định     |
 | ---- | ---------------------------------------- | ------------ |
-| 0a   | Loại key (ed25519 / rsa)                 | `ed25519`    |
-| 0b   | Tên file key (tự động lưu vào `~/.ssh/`) | `id_ed25519` |
-| 0c   | Comment / email nhận diện key            | _(bỏ trống)_ |
-| 0d   | Thêm key vào `ssh-agent` không?          | `y`          |
-| 0e   | Xác nhận tóm tắt trước khi tiếp tục      | `y`          |
+| 1a   | Loại key (ed25519 / rsa)                 | `ed25519`    |
+| 1b   | Tên file key (tự động lưu vào `~/.ssh/`) | `id_ed25519` |
+| 1c   | Comment / email nhận diện key            | _(bỏ trống)_ |
+| 1d   | Thêm key vào `ssh-agent` không?          | `y`          |
+| 1e   | Xác nhận tóm tắt trước khi tiếp tục      | `y`          |
 | 2    | Ghi đè nếu key đã tồn tại?               | `N`          |
-| 4    | Cấu hình `~/.ssh/config` tự động không?  | `y`          |
+| 3    | Cấu hình `~/.ssh/config` tự động không?  | `y`          |
 
 #### Bao gồm
 

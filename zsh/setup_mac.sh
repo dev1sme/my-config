@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-# Zsh Setup Script
+# Zsh Setup Script - macOS
 # Cài đặt Zsh, Oh My Zsh, plugins và set Zsh làm default shell
 # ============================================================
 
@@ -21,8 +21,8 @@ header() { echo -e "${BLUE}[====]${NC} $1"; }
 # Kiểm tra hệ điều hành
 # ============================================================
 case "$(uname -s)" in
-    Linux)  ;;  # OK
-    Darwin) error "Bạn đang dùng macOS. Hãy chạy: ./zsh/setup_mac.sh" ;;
+    Darwin) ;;  # OK
+    Linux)  error "Bạn đang dùng Linux. Hãy chạy: ./zsh/setup.sh" ;;
     MINGW*|MSYS*|CYGWIN*)
             error "Windows không hỗ trợ Zsh native. Script này chỉ dành cho macOS/Linux." ;;
     *)      error "Hệ điều hành không được hỗ trợ: $(uname -s)" ;;
@@ -31,25 +31,34 @@ esac
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ============================================================
+# Kiểm tra Homebrew
+# ============================================================
+check_homebrew() {
+    if ! command -v brew &>/dev/null; then
+        error "Homebrew chưa được cài đặt. Hãy cài Homebrew trước:
+       /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
+    fi
+    info "Homebrew đã được cài đặt."
+}
+
+# ============================================================
 # 1. Cài đặt Zsh
 # ============================================================
 install_zsh() {
     header "Kiểm tra Zsh..."
     if command -v zsh &>/dev/null; then
         info "Zsh đã được cài đặt: $(zsh --version)"
-    else
-        info "Đang cài đặt Zsh..."
-        if command -v apt &>/dev/null; then
-            sudo apt update && sudo apt install -y zsh
-        elif command -v dnf &>/dev/null; then
-            sudo dnf install -y zsh
-        elif command -v yum &>/dev/null; then
-            sudo yum install -y zsh
-        elif command -v pacman &>/dev/null; then
-            sudo pacman -S --noconfirm zsh
+        # macOS mặc định đã có zsh, nhưng có thể cài bản mới hơn qua Homebrew
+        local system_zsh="/bin/zsh"
+        local brew_zsh="$(brew --prefix)/bin/zsh"
+        if [ -x "$brew_zsh" ]; then
+            info "Đang dùng Zsh từ Homebrew: $brew_zsh"
         else
-            error "Không tìm thấy package manager phù hợp. Hãy cài Zsh thủ công."
+            warn "Đang dùng Zsh hệ thống ($system_zsh). Cài bản mới hơn qua Homebrew? (tùy chọn)"
         fi
+    else
+        info "Đang cài đặt Zsh qua Homebrew..."
+        brew install zsh
         info "Zsh đã được cài đặt thành công: $(zsh --version)"
     fi
 }
@@ -100,18 +109,10 @@ install_fzf() {
     if command -v fzf &>/dev/null; then
         info "fzf đã được cài đặt."
     else
-        info "Đang cài đặt fzf..."
-        if command -v apt &>/dev/null; then
-            sudo apt install -y fzf
-        elif command -v dnf &>/dev/null; then
-            sudo dnf install -y fzf
-        elif command -v pacman &>/dev/null; then
-            sudo pacman -S --noconfirm fzf
-        else
-            # Cài từ git nếu không có package manager
-            git clone --depth 1 https://github.com/junegunn/fzf.git ~/.fzf
-            ~/.fzf/install --all
-        fi
+        info "Đang cài đặt fzf qua Homebrew..."
+        brew install fzf
+        # Cài key bindings và fuzzy completion
+        "$(brew --prefix)/opt/fzf/install" --all --no-bash --no-fish
         info "fzf đã được cài đặt thành công."
     fi
 }
@@ -172,10 +173,11 @@ copy_zshrc() {
 # ============================================================
 main() {
     echo "=========================================="
-    echo "  Zsh + Oh My Zsh Setup Script"
+    echo "  Zsh + Oh My Zsh Setup Script (macOS)"
     echo "=========================================="
     echo ""
 
+    check_homebrew
     install_zsh
     set_default_shell
     install_ohmyzsh

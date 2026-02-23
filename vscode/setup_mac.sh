@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-# VS Code Setup Script
+# VS Code Setup Script - macOS
 # Cài đặt extensions và cấu hình settings cho VS Code
 # ============================================================
 
@@ -21,8 +21,8 @@ header() { echo -e "${BLUE}[====]${NC} $1"; }
 # Kiểm tra hệ điều hành
 # ============================================================
 case "$(uname -s)" in
-    Linux)  ;;  # OK
-    Darwin) error "Bạn đang dùng macOS. Hãy chạy: ./vscode/setup_mac.sh" ;;
+    Darwin) ;;  # OK
+    Linux)  error "Bạn đang dùng Linux. Hãy chạy: ./vscode/setup.sh" ;;
     MINGW*|MSYS*|CYGWIN*)
             error "Bạn đang dùng Windows. Hãy chạy: .\\vscode\\setup.ps1  (PowerShell)" ;;
     *)      error "Hệ điều hành không được hỗ trợ: $(uname -s)" ;;
@@ -33,22 +33,59 @@ EXTENSIONS_FILE="$SCRIPT_DIR/extensions.txt"
 SETTINGS_FILE="$SCRIPT_DIR/setting.json"
 
 # ============================================================
-# VS Code settings path (Linux)
+# VS Code settings path (macOS)
 # ============================================================
 get_vscode_settings_dir() {
-    echo "$HOME/.config/Code/User"
+    echo "$HOME/Library/Application Support/Code/User"
 }
 
 # ============================================================
 # 1. Kiểm tra VS Code đã cài chưa
 # ============================================================
+# Đường dẫn VS Code khi cài bằng .dmg (kéo vào Applications)
+# ============================================================
+VSCODE_APP="/Applications/Visual Studio Code.app"
+VSCODE_BIN="$VSCODE_APP/Contents/Resources/app/bin/code"
+
 check_vscode() {
     header "Kiểm tra VS Code..."
+
     if command -v code &>/dev/null; then
         info "VS Code đã được cài đặt: $(code --version | head -1)"
+        return
+    fi
+
+    # Cài bằng .dmg nhưng chưa thêm 'code' vào PATH
+    if [ -d "$VSCODE_APP" ] && [ -f "$VSCODE_BIN" ]; then
+        warn "VS Code đã cài (${VSCODE_APP}) nhưng lệnh 'code' chưa có trong PATH."
+        info "Đang thêm 'code' vào PATH..."
+
+        # Tạo symlink vào /usr/local/bin (cần quyền ghi)
+        local link_target="/usr/local/bin/code"
+        if [ -w "/usr/local/bin" ] || [ -w "$link_target" ]; then
+            ln -sf "$VSCODE_BIN" "$link_target"
+        else
+            warn "Cần quyền admin để tạo symlink. Nhập mật khẩu nếu được hỏi."
+            sudo ln -sf "$VSCODE_BIN" "$link_target"
+        fi
+
+        # Kiểm tra lại
+        if command -v code &>/dev/null; then
+            info "Đã thêm 'code' vào PATH thành công."
+            info "VS Code: $(code --version | head -1)"
+        else
+            # Fallback: thêm vào PATH tạm thời cho session này
+            export PATH="$(dirname "$VSCODE_BIN"):$PATH"
+            info "Đã thêm vào PATH cho session hiện tại."
+            warn "Thêm dòng sau vào ~/.zshrc hoặc ~/.bash_profile để dùng lâu dài:"
+            echo "    export PATH=\"\$(dirname '$VSCODE_BIN'):\$PATH\""
+        fi
     else
         error "VS Code chưa được cài đặt. Hãy cài VS Code trước khi chạy script này.
-       Download: https://code.visualstudio.com/download"
+       Download: https://code.visualstudio.com/download
+       Hoặc qua Homebrew: brew install --cask visual-studio-code
+       
+       Nếu đã cài bằng .dmg, hãy kéo VS Code vào thư mục Applications."
     fi
 }
 
@@ -156,7 +193,7 @@ show_help() {
 
 main() {
     echo "=========================================="
-    echo "  VS Code Setup Script"
+    echo "  VS Code Setup Script (macOS)"
     echo "=========================================="
     echo ""
 

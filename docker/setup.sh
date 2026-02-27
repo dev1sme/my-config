@@ -17,6 +17,13 @@ warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 header() { echo -e "${BLUE}[====]${NC} $1"; }
 
+# Dùng sudo khi không phải root, bỏ qua khi đã là root
+if [ "$EUID" -eq 0 ]; then
+    SUDO=""
+else
+    SUDO="sudo"
+fi
+
 # ============================================================
 # Detect distro
 # ============================================================
@@ -52,7 +59,7 @@ remove_old_docker() {
     for pkg in "${old_packages[@]}"; do
         if dpkg -l "$pkg" &>/dev/null 2>&1; then
             warn "Gỡ package cũ: $pkg"
-            sudo apt-get remove -y "$pkg" >/dev/null 2>&1 || true
+            $SUDO apt-get remove -y "$pkg" >/dev/null 2>&1 || true
         fi
     done
 
@@ -65,8 +72,8 @@ remove_old_docker() {
 install_dependencies() {
     header "Cài đặt dependencies..."
 
-    sudo apt-get update -y
-    sudo apt-get install -y \
+    $SUDO apt-get update -y
+    $SUDO apt-get install -y \
         ca-certificates \
         curl \
         gnupg \
@@ -82,15 +89,15 @@ setup_docker_repo() {
     header "Thêm Docker GPG key & repository..."
 
     # Tạo thư mục keyrings
-    sudo install -m 0755 -d /etc/apt/keyrings
+    $SUDO install -m 0755 -d /etc/apt/keyrings
 
     local gpg_key="/etc/apt/keyrings/docker.asc"
 
     # Download GPG key
     if [ ! -f "$gpg_key" ]; then
         info "Download Docker GPG key..."
-        sudo curl -fsSL "https://download.docker.com/linux/${DISTRO}/gpg" -o "$gpg_key"
-        sudo chmod a+r "$gpg_key"
+        $SUDO curl -fsSL "https://download.docker.com/linux/${DISTRO}/gpg" -o "$gpg_key"
+        $SUDO chmod a+r "$gpg_key"
     else
         info "Docker GPG key đã tồn tại."
     fi
@@ -101,9 +108,9 @@ setup_docker_repo() {
     arch="$(dpkg --print-architecture)"
 
     echo "deb [arch=${arch} signed-by=${gpg_key}] https://download.docker.com/linux/${DISTRO} ${DISTRO_CODENAME} stable" | \
-        sudo tee "$repo_file" > /dev/null
+        $SUDO tee "$repo_file" > /dev/null
 
-    sudo apt-get update -y
+    $SUDO apt-get update -y
 
     info "Docker repository đã được thêm."
 }
@@ -119,7 +126,7 @@ install_docker_engine() {
         warn "Cài đặt lại/cập nhật Docker Engine..."
     fi
 
-    sudo apt-get install -y \
+    $SUDO apt-get install -y \
         docker-ce \
         docker-ce-cli \
         containerd.io \
@@ -136,9 +143,15 @@ install_docker_engine() {
 setup_docker_group() {
     header "Cấu hình Docker group..."
 
+    # Root đã có toàn quyền, không cần thêm vào group
+    if [ "$EUID" -eq 0 ]; then
+        info "Đang chạy với root, bỏ qua cấu hình Docker group."
+        return
+    fi
+
     # Tạo group docker nếu chưa có
     if ! getent group docker &>/dev/null; then
-        sudo groupadd docker
+        $SUDO groupadd docker
         info "Đã tạo group 'docker'."
     fi
 
@@ -146,7 +159,7 @@ setup_docker_group() {
     if id -nG "$USER" | grep -qw docker; then
         info "User '$USER' đã thuộc group 'docker'."
     else
-        sudo usermod -aG docker "$USER"
+        $SUDO usermod -aG docker "$USER"
         info "Đã thêm user '$USER' vào group 'docker'."
         warn "Cần logout/login lại để chạy Docker không cần sudo."
     fi
@@ -158,11 +171,11 @@ setup_docker_group() {
 enable_docker_service() {
     header "Bật Docker service..."
 
-    sudo systemctl enable docker.service
-    sudo systemctl enable containerd.service
-    sudo systemctl start docker.service
+    $SUDO systemctl enable docker.service
+    $SUDO systemctl enable containerd.service
+    $SUDO systemctl start docker.service
 
-    if sudo systemctl is-active --quiet docker; then
+    if $SUDO systemctl is-active --quiet docker; then
         info "Docker service đang chạy."
     else
         error "Docker service không thể khởi động!"
@@ -188,7 +201,7 @@ verify_installation() {
 
     # Test chạy hello-world (cần sudo nếu chưa logout/login)
     info "Chạy test container hello-world..."
-    if sudo docker run --rm hello-world >/dev/null 2>&1; then
+    if $SUDO docker run --rm hello-world >/dev/null 2>&1; then
         info "✓ Docker hoạt động bình thường!"
     else
         warn "Không thể chạy test container. Kiểm tra lại Docker service."
@@ -202,18 +215,18 @@ install_docker_rpm() {
     header "Cài đặt Docker Engine (RPM-based)..."
 
     # Gỡ package cũ
-    sudo dnf remove -y docker docker-client docker-client-latest \
+    $SUDO dnf remove -y docker docker-client docker-client-latest \
         docker-common docker-latest docker-latest-logrotate \
         docker-logrotate docker-engine podman runc 2>/dev/null || true
 
     # Cài dependencies
-    sudo dnf install -y dnf-plugins-core
+    $SUDO dnf install -y dnf-plugins-core
 
     # Thêm repo
-    sudo dnf config-manager --add-repo "https://download.docker.com/linux/${DISTRO}/docker-ce.repo"
+    $SUDO dnf config-manager --add-repo "https://download.docker.com/linux/${DISTRO}/docker-ce.repo"
 
     # Cài Docker
-    sudo dnf install -y \
+    $SUDO dnf install -y \
         docker-ce \
         docker-ce-cli \
         containerd.io \
@@ -232,9 +245,9 @@ main() {
     echo "=========================================="
     echo ""
 
-    # Kiểm tra quyền root
+    # Cảnh báo nếu chạy bằng root
     if [ "$EUID" -eq 0 ]; then
-        error "Không nên chạy script này với root/sudo. Script sẽ tự gọi sudo khi cần."
+        warn "Đang chạy với quyền root. Bỏ qua sudo."
     fi
 
     detect_distro
@@ -274,7 +287,9 @@ main() {
     echo "    - Docker Buildx"
     echo "    - Docker Compose Plugin (v2)"
     echo ""
-    warn "Hãy logout và login lại để chạy Docker không cần sudo."
+    if [ "$EUID" -ne 0 ]; then
+        warn "Hãy logout và login lại để chạy Docker không cần sudo."
+    fi
     echo ""
     echo "  Lệnh test: docker run hello-world"
     echo ""

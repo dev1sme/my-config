@@ -23,8 +23,6 @@ $Root = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 . (Join-Path $PSScriptRoot 'Modules.ps1')
 . (Join-Path $PSScriptRoot 'Runner.ps1')
 
-$LinuxUrl = "https://raw.githubusercontent.com/$Repo/$Ref/install.sh"
-
 $modules = Get-MyConfigModules $Root
 
 if ($List) {
@@ -40,14 +38,6 @@ try {
     $who = $envInfo.User
     if ($envInfo.IsAdmin) { $who += ' (Admin)' }
     Write-UiStep "Hệ thống: $($envInfo.OsName) $($G.Dot) $($envInfo.Arch) $($G.Dot) PowerShell $($envInfo.PsVersion) $($G.Dot) user $who"
-
-    if ($envInfo.HasWsl) {
-        Write-UiInfo "Zsh / Docker: mở WSL rồi chạy bản Linux:"
-        Write-UiLine "$($C.Cyan)curl -fsSL $LinuxUrl | bash$($C.Reset)"
-        Write-UiBar
-    } else {
-        Write-UiInfo "Zsh / Docker cần WSL2: wsl --install, rồi chạy bản Linux trong WSL"
-    }
 
     # ---- Select modules ----
     $selected = @()

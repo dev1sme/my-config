@@ -34,8 +34,8 @@ Installer tự tải repo về `~/.my-config`, detect OS, rồi mở wizard đ�
 | Module   | Linux | macOS | Windows                          |
 | -------- | ----- | ----- | -------------------------------- |
 | `ssh`    | ✔     | ✔     | ✔ (tự hỏi mở lại với quyền Admin) |
-| `zsh`    | ✔     | ✔     | Trong WSL: chạy lệnh Linux       |
-| `docker` | ✔     | OrbStack | Trong WSL: chạy lệnh Linux    |
+| `zsh`    | ✔     | ✔     | ✘                                |
+| `docker` | ✔     | OrbStack | ✘                             |
 | `vscode` | ✔     | ✔     | ✔                                |
 
 ### Non-interactive (VPS, CI)
@@ -107,7 +107,7 @@ my-config/
 │   └── ps/                   # PowerShell 5.1+ (UTF-8 BOM)
 │       ├── Main.ps1          # Flow chính Windows
 │       ├── UI.ps1            # Loader UI: UI.Core, UI.Prompt, UI.Spinner
-│       ├── Env.ps1  Modules.ps1  Runner.ps1  Banner.ps1
+│       └── Env.ps1  Modules.ps1  Runner.ps1  Banner.ps1
 ├── docker/
 │   ├── module.conf
 │   └── setup.sh              # Cài đặt Docker Engine + Docker Compose

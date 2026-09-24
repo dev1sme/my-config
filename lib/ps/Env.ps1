@@ -12,17 +12,6 @@ function Test-IsAdmin {
     }
 }
 
-function Test-HasWsl {
-    if (-not (Get-Command wsl.exe -ErrorAction SilentlyContinue)) { return $false }
-    try {
-        # wsl -l outputs UTF-16; any non-empty distro name means WSL is ready
-        $distros = (& wsl.exe -l -q 2>$null) -replace "`0", '' | Where-Object { $_.Trim() }
-        return [bool]$distros
-    } catch {
-        return $false
-    }
-}
-
 function Get-MyConfigEnv {
     $osName = 'Windows'
     try {
@@ -41,7 +30,6 @@ function Get-MyConfigEnv {
         Arch      = $arch
         User      = [Environment]::UserName
         IsAdmin   = Test-IsAdmin
-        HasWsl    = Test-HasWsl
         PsVersion = $PSVersionTable.PSVersion.ToString()
         PsExe     = (Get-Process -Id $PID).Path
     }

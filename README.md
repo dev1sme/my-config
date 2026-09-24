@@ -4,11 +4,19 @@ Bộ script tự động cài đặt và cấu hình môi trường phát triể
 
 ## ⚡ Cài đặt nhanh (1 lệnh)
 
+**Linux / macOS**
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dev1sme/my-config/main/install.sh | bash
 ```
 
-Installer tự tải repo về `~/.my-config`, detect OS/distro, rồi mở wizard để chọn module:
+**Windows** (PowerShell, nên dùng Windows Terminal)
+
+```powershell
+irm https://raw.githubusercontent.com/dev1sme/my-config/main/install.ps1 | iex
+```
+
+Installer tự tải repo về `~/.my-config`, detect OS, rồi mở wizard để chọn module:
 
 ```
 ┌  my-config setup
@@ -23,49 +31,101 @@ Installer tự tải repo về `~/.my-config`, detect OS/distro, rồi mở wiza
 └  ↑/↓ di chuyển · space chọn · a chọn tất cả · enter xác nhận
 ```
 
-Non-interactive (VPS, CI):
+| Module   | Linux | macOS | Windows                          |
+| -------- | ----- | ----- | -------------------------------- |
+| `ssh`    | ✔     | ✔     | ✔ (tự hỏi mở lại với quyền Admin) |
+| `zsh`    | ✔     | ✔     | Trong WSL: chạy lệnh Linux       |
+| `docker` | ✔     | OrbStack | Trong WSL: chạy lệnh Linux    |
+| `vscode` | ✔     | ✔     | ✔                                |
+
+### Non-interactive (VPS, CI)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dev1sme/my-config/main/install.sh | bash -s -- --only zsh,docker -y
 curl -fsSL https://raw.githubusercontent.com/dev1sme/my-config/main/install.sh | bash -s -- --all -y
 ```
 
-| Option        | Mô tả                                              |
-| ------------- | -------------------------------------------------- |
-| `--only LIST` | Chỉ cài module chỉ định: `ssh,zsh,docker,vscode`   |
-| `--all`       | Cài tất cả module khả dụng trên OS hiện tại        |
-| `-y, --yes`   | Bỏ qua bước xác nhận                               |
-| `--list`      | Liệt kê module                                     |
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/dev1sme/my-config/main/install.ps1))) -Only ssh,vscode -Yes
+```
 
-| Biến môi trường  | Mặc định            | Mô tả                    |
-| ---------------- | ------------------- | ------------------------ |
-| `MY_CONFIG_DIR`  | `~/.my-config`      | Nơi tải repo về          |
-| `MY_CONFIG_REF`  | `main`              | Branch                   |
-| `MY_CONFIG_REPO` | `dev1sme/my-config` | GitHub repo              |
+| Bash          | PowerShell    | Mô tả                                            |
+| ------------- | ------------- | ------------------------------------------------ |
+| `--only LIST` | `-Only LIST`  | Chỉ cài module chỉ định, vd: `ssh,zsh`           |
+| `--all`       | `-All`        | Cài tất cả module khả dụng trên OS hiện tại      |
+| `-y, --yes`   | `-Yes`        | Bỏ qua bước xác nhận                             |
+| `--list`      | `-List`       | Liệt kê module                                   |
 
-Log của module chạy nền lưu tại `~/.local/state/my-config/logs/<timestamp>/`.
+| Biến môi trường  | Mặc định            | Mô tả           |
+| ---------------- | ------------------- | --------------- |
+| `MY_CONFIG_DIR`  | `~/.my-config`      | Nơi tải repo về |
+| `MY_CONFIG_REF`  | `main`              | Branch          |
+| `MY_CONFIG_REPO` | `dev1sme/my-config` | GitHub repo     |
+
+Log của module chạy nền: `~/.local/state/my-config/logs/<timestamp>/` (Windows: `%LOCALAPPDATA%\my-config\logs\`).
+
+### Thêm module mới
+
+Tạo thư mục `<module>/` gồm script + `module.conf`, installer tự nhận:
+
+```ini
+label=SSH key + ssh-agent
+hint=ed25519/rsa · ssh-agent · ~/.ssh/config
+order=10
+mode=tty
+default=on
+sudo=windows
+requires=
+linux=setup.sh
+mac=setup_mac.sh
+windows=setup.ps1
+next=Thêm public key vào GitHub: https://github.com/settings/keys
+```
+
+| Key        | Mô tả                                                            |
+| ---------- | ---------------------------------------------------------------- |
+| `mode`     | `tty` = script hỏi tương tác, `bg` = chạy nền có spinner + log   |
+| `sudo`     | OS cần sudo/Admin, phân cách dấu phẩy: `linux`, `mac`, `windows` |
+| `requires` | Lệnh bắt buộc có sẵn, thiếu thì module mặc định bỏ chọn          |
+| `linux` / `mac` / `windows` | Script cho từng OS, bỏ trống = không hỗ trợ     |
+| `next`     | Gợi ý hiển thị sau khi cài xong                                  |
 
 ## 📁 Cấu trúc
 
 ```
 my-config/
-├── install.sh                # Installer 1 lệnh (wizard chọn module)
+├── install.sh                # Installer Linux/macOS (bootstrap + flow)
+├── install.ps1               # Installer Windows (bootstrap, ASCII only)
 ├── lib/
-│   └── ui.sh                 # Clack-style terminal UI helpers
+│   ├── banner.txt            # ASCII banner dùng chung
+│   ├── sh/                   # Bash (3.2+)
+│   │   ├── ui.sh             # Loader UI: ui/core.sh, ui/prompt.sh, ui/spinner.sh
+│   │   ├── env.sh            # Detect OS / distro / root / WSL
+│   │   ├── modules.sh        # Đọc module.conf
+│   │   ├── runner.sh         # sudo, chạy module, tổng kết
+│   │   └── banner.sh
+│   └── ps/                   # PowerShell 5.1+ (UTF-8 BOM)
+│       ├── Main.ps1          # Flow chính Windows
+│       ├── UI.ps1            # Loader UI: UI.Core, UI.Prompt, UI.Spinner
+│       ├── Env.ps1  Modules.ps1  Runner.ps1  Banner.ps1
 ├── docker/
+│   ├── module.conf
 │   └── setup.sh              # Cài đặt Docker Engine + Docker Compose
 ├── ssh/
+│   ├── module.conf
 │   ├── setup.sh              # Linux: Tạo SSH key pair + cấu hình ssh-agent
 │   ├── setup_mac.sh          # macOS: Tạo SSH key pair + Keychain
 │   └── setup.ps1             # Windows: Tạo SSH key pair + OpenSSH service
 ├── vscode/
-│   ├── setting.json           # Cấu hình VS Code settings
-│   ├── extensions.txt         # Danh sách extensions
+│   ├── module.conf
+│   ├── setting.json          # Cấu hình VS Code settings
+│   ├── extensions.txt        # Danh sách extensions
 │   ├── setup.sh              # Linux: Cài extensions + apply settings
 │   ├── setup_mac.sh          # macOS: Cài extensions + apply settings
 │   └── setup.ps1             # Windows: Cài extensions + apply settings
 ├── zsh/
-│   ├── .zshrc                 # File cấu hình Zsh
+│   ├── module.conf
+│   ├── .zshrc                # File cấu hình Zsh
 │   ├── setup.sh              # Linux: Cài Zsh + Oh My Zsh + plugins
 │   └── setup_mac.sh          # macOS: Cài Zsh + Oh My Zsh + plugins
 └── README.md

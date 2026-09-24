@@ -121,13 +121,13 @@ function Collect-Config {
     Write-Host ""
     Write-Host "  " -NoNewline; Write-Host "ssh-agent" -NoNewline -ForegroundColor Yellow; Write-Host " tren Windows:"
     Write-Host "    Dich vu OpenSSH Authentication Agent chay ngam trong Windows."
-    Write-Host "    Giu private key da unlock → ssh/git dung ngay, khong hoi passphrase."
+    Write-Host "    Giu private key da unlock -> ssh/git dung ngay, khong hoi passphrase."
     Write-Host ""
     Write-Host "  " -NoNewline
     Write-Host "[Y] Them vao ssh-agent" -NoNewline -ForegroundColor Green
     Write-Host " (khuyen dung)" -ForegroundColor Green
     Write-Host "      Script se bat dich vu va them key tu dong."
-    Write-Host "      Neu co nhieu key, moi key chay setup mot lan → agent giu tat ca."
+    Write-Host "      Neu co nhieu key, moi key chay setup mot lan -> agent giu tat ca."
     Write-Host ""
     Write-Host "  " -NoNewline
     Write-Host "[N] Khong them" -ForegroundColor Yellow

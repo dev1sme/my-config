@@ -2,10 +2,56 @@
 
 Bộ script tự động cài đặt và cấu hình môi trường phát triển trên **Linux**, **macOS** và **Windows**.
 
+## ⚡ Cài đặt nhanh (1 lệnh)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dev1sme/my-config/main/install.sh | bash
+```
+
+Installer tự tải repo về `~/.my-config`, detect OS/distro, rồi mở wizard để chọn module:
+
+```
+┌  my-config setup
+│
+◇  Hệ thống: Ubuntu 24.04 LTS · x86_64 · user root
+│
+◆  Chọn module cần cài
+│  ◼ SSH key + ssh-agent
+│  ◼ Zsh + Oh My Zsh
+│  ◼ Docker Engine + Compose (docker-ce, buildx, compose v2)
+│  ◻ VS Code extensions + settings
+└  ↑/↓ di chuyển · space chọn · a chọn tất cả · enter xác nhận
+```
+
+Non-interactive (VPS, CI):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dev1sme/my-config/main/install.sh | bash -s -- --only zsh,docker -y
+curl -fsSL https://raw.githubusercontent.com/dev1sme/my-config/main/install.sh | bash -s -- --all -y
+```
+
+| Option        | Mô tả                                              |
+| ------------- | -------------------------------------------------- |
+| `--only LIST` | Chỉ cài module chỉ định: `ssh,zsh,docker,vscode`   |
+| `--all`       | Cài tất cả module khả dụng trên OS hiện tại        |
+| `-y, --yes`   | Bỏ qua bước xác nhận                               |
+| `--list`      | Liệt kê module                                     |
+
+| Biến môi trường  | Mặc định            | Mô tả                    |
+| ---------------- | ------------------- | ------------------------ |
+| `MY_CONFIG_DIR`  | `~/.my-config`      | Nơi tải repo về          |
+| `MY_CONFIG_REF`  | `main`              | Branch                   |
+| `MY_CONFIG_REPO` | `dev1sme/my-config` | GitHub repo              |
+
+Log của module chạy nền lưu tại `~/.local/state/my-config/logs/<timestamp>/`.
+
 ## 📁 Cấu trúc
 
 ```
 my-config/
+├── install.sh                # Installer 1 lệnh (wizard chọn module)
+├── lib/
+│   └── ui.sh                 # Clack-style terminal UI helpers
 ├── docker/
 │   └── setup.sh              # Cài đặt Docker Engine + Docker Compose
 ├── ssh/
@@ -293,7 +339,7 @@ Cài đặt 35 extensions và apply file `setting.json` vào VS Code. Tự độ
 
 </details>
 
-## ⚡ Setup nhanh (tất cả)
+## 🧩 Chạy thủ công từng script (tất cả)
 
 ```bash
 git clone https://github.com/dev1sme/my-config.git

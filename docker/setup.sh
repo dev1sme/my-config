@@ -17,173 +17,195 @@ warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 header() { echo -e "${BLUE}[====]${NC} $1"; }
 
-# Dùng sudo khi không phải root, bỏ qua khi đã là root
-if [ "$EUID" -eq 0 ]; then
-    SUDO=""
-else
-    SUDO="sudo"
-fi
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# shellcheck source=../lib/sh/pkg.sh
+. "$SCRIPT_DIR/../lib/sh/pkg.sh"
+require_sudo || exit 1
+USER_NAME="$(id -un)"
 
 # ============================================================
 # Detect distro
+# Sets: DISTRO, DISTRO_VERSION, DISTRO_LIKE, INSTALL_METHOD, DOCKER_REPO, APT_CODENAME
 # ============================================================
 detect_distro() {
-    if [ -f /etc/os-release ]; then
-        . /etc/os-release
-        DISTRO="$ID"
-        DISTRO_VERSION="$VERSION_ID"
-        DISTRO_CODENAME="$VERSION_CODENAME"
-    else
+    if [ ! -f /etc/os-release ]; then
         error "Không thể xác định distro. File /etc/os-release không tồn tại."
     fi
 
-    info "Distro: $DISTRO $DISTRO_VERSION ($DISTRO_CODENAME)"
+    # shellcheck disable=SC1091
+    . /etc/os-release
+    DISTRO="$ID"
+    DISTRO_VERSION="${VERSION_ID:-}"
+    DISTRO_LIKE="${ID_LIKE:-}"
+
+    # Docker official repo chỉ có cho: ubuntu, debian, raspbian, fedora, rhel, centos.
+    # Distro dẫn xuất dùng repo của distro gốc.
+    case "$DISTRO" in
+        ubuntu|debian|raspbian)
+            INSTALL_METHOD="apt-repo"
+            DOCKER_REPO="$DISTRO"
+            APT_CODENAME="${VERSION_CODENAME:-}"
+            ;;
+        fedora)
+            INSTALL_METHOD="rpm-repo"; DOCKER_REPO="fedora" ;;
+        rhel)
+            INSTALL_METHOD="rpm-repo"; DOCKER_REPO="rhel" ;;
+        centos|rocky|almalinux|ol)
+            INSTALL_METHOD="rpm-repo"; DOCKER_REPO="centos" ;;
+        arch|manjaro|endeavouros|cachyos)
+            INSTALL_METHOD="distro" ;;
+        opensuse*|sles)
+            INSTALL_METHOD="distro" ;;
+        alpine)
+            INSTALL_METHOD="distro" ;;
+        *)
+            case " $DISTRO_LIKE " in
+                *" ubuntu "*)
+                    # Mint, Pop!_OS, Zorin, elementary...: codename của Ubuntu gốc
+                    INSTALL_METHOD="apt-repo"; DOCKER_REPO="ubuntu"
+                    APT_CODENAME="${UBUNTU_CODENAME:-}"
+                    ;;
+                *" debian "*)
+                    INSTALL_METHOD="apt-repo"; DOCKER_REPO="debian"
+                    APT_CODENAME="${DEBIAN_CODENAME:-${VERSION_CODENAME:-}}"
+                    ;;
+                *" rhel "*|*" centos "*|*" fedora "*)
+                    INSTALL_METHOD="rpm-repo"; DOCKER_REPO="centos" ;;
+                *" arch "*|*" suse "*)
+                    INSTALL_METHOD="distro" ;;
+                *)
+                    error "Distro '$DISTRO' chưa được hỗ trợ trong script này.
+       Xem hướng dẫn: https://docs.docker.com/engine/install/"
+                    ;;
+            esac
+            ;;
+    esac
+
+    if [ "$INSTALL_METHOD" = "apt-repo" ] && [ -z "$APT_CODENAME" ]; then
+        error "Không xác định được codename cho repo Docker ($DISTRO)."
+    fi
+
+    info "Distro: $DISTRO $DISTRO_VERSION (cài qua: $INSTALL_METHOD${DOCKER_REPO:+, repo $DOCKER_REPO})"
 }
 
 # ============================================================
-# 1. Gỡ các package Docker cũ/không chính thức
+# Debian-based: official apt repository
 # ============================================================
-remove_old_docker() {
+install_docker_apt() {
     header "Gỡ các package Docker cũ (nếu có)..."
-
-    local old_packages=(
-        docker.io
-        docker-doc
-        docker-compose
-        docker-compose-v2
-        podman-docker
-        containerd
-        runc
-    )
-
-    for pkg in "${old_packages[@]}"; do
-        if dpkg -l "$pkg" &>/dev/null 2>&1; then
-            warn "Gỡ package cũ: $pkg"
-            $SUDO apt-get remove -y "$pkg" >/dev/null 2>&1 || true
-        fi
-    done
-
+    pkg_remove docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc
     info "Đã dọn dẹp các package Docker cũ."
-}
 
-# ============================================================
-# 2. Cài đặt dependencies
-# ============================================================
-install_dependencies() {
     header "Cài đặt dependencies..."
-
-    $SUDO apt-get update -y
-    $SUDO apt-get install -y \
-        ca-certificates \
-        curl \
-        gnupg \
-        lsb-release
-
+    pkg_install ca-certificates curl gnupg
     info "Dependencies đã sẵn sàng."
-}
 
-# ============================================================
-# 3. Thêm Docker GPG key & repository
-# ============================================================
-setup_docker_repo() {
     header "Thêm Docker GPG key & repository..."
-
-    # Tạo thư mục keyrings
     $SUDO install -m 0755 -d /etc/apt/keyrings
-
     local gpg_key="/etc/apt/keyrings/docker.asc"
-
-    # Download GPG key
     if [ ! -f "$gpg_key" ]; then
         info "Download Docker GPG key..."
-        $SUDO curl -fsSL "https://download.docker.com/linux/${DISTRO}/gpg" -o "$gpg_key"
+        $SUDO curl -fsSL "https://download.docker.com/linux/${DOCKER_REPO}/gpg" -o "$gpg_key"
         $SUDO chmod a+r "$gpg_key"
     else
         info "Docker GPG key đã tồn tại."
     fi
 
-    # Thêm repository
-    local repo_file="/etc/apt/sources.list.d/docker.list"
     local arch
     arch="$(dpkg --print-architecture)"
-
-    echo "deb [arch=${arch} signed-by=${gpg_key}] https://download.docker.com/linux/${DISTRO} ${DISTRO_CODENAME} stable" | \
-        $SUDO tee "$repo_file" > /dev/null
-
+    echo "deb [arch=${arch} signed-by=${gpg_key}] https://download.docker.com/linux/${DOCKER_REPO} ${APT_CODENAME} stable" |
+        $SUDO tee /etc/apt/sources.list.d/docker.list >/dev/null
     $SUDO apt-get update -y
-
     info "Docker repository đã được thêm."
-}
 
-# ============================================================
-# 4. Cài đặt Docker Engine
-# ============================================================
-install_docker_engine() {
     header "Cài đặt Docker Engine..."
-
-    if command -v docker &>/dev/null; then
-        info "Docker đã được cài đặt: $(docker --version)"
-        warn "Cài đặt lại/cập nhật Docker Engine..."
-    fi
-
-    $SUDO apt-get install -y \
-        docker-ce \
-        docker-ce-cli \
-        containerd.io \
-        docker-buildx-plugin \
-        docker-compose-plugin
-
-    info "Docker Engine đã được cài đặt: $(docker --version)"
-    info "Docker Compose: $(docker compose version)"
+    pkg_install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 }
 
 # ============================================================
-# 5. Thêm user vào group docker (chạy không cần sudo)
+# RPM-based: official yum/dnf repository
+# ============================================================
+install_docker_rpm() {
+    header "Gỡ các package Docker cũ (nếu có)..."
+    pkg_remove docker docker-client docker-client-latest docker-common docker-latest \
+        docker-latest-logrotate docker-logrotate docker-engine podman runc
+    info "Đã dọn dẹp các package Docker cũ."
+
+    header "Thêm Docker repository..."
+    # Tải thẳng file .repo: chạy được với cả dnf4, dnf5 (Fedora 41+) và yum
+    pkg_ensure_cmd curl
+    $SUDO curl -fsSL "https://download.docker.com/linux/${DOCKER_REPO}/docker-ce.repo" \
+        -o /etc/yum.repos.d/docker-ce.repo
+    info "Docker repository đã được thêm."
+
+    header "Cài đặt Docker Engine..."
+    pkg_install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+}
+
+# ============================================================
+# Arch / openSUSE / Alpine: package của distro
+# ============================================================
+install_docker_distro() {
+    header "Cài đặt Docker Engine (package của distro)..."
+    case "$PKG_MANAGER" in
+        pacman) pkg_install docker docker-compose docker-buildx ;;
+        zypper) pkg_install docker docker-compose docker-buildx ;;
+        apk)    pkg_install docker docker-cli-compose docker-cli-buildx ;;
+        *)      error "Không hỗ trợ cài Docker qua $PKG_MANAGER." ;;
+    esac
+}
+
+# ============================================================
+# Thêm user vào group docker (chạy không cần sudo)
 # ============================================================
 setup_docker_group() {
     header "Cấu hình Docker group..."
 
     # Root đã có toàn quyền, không cần thêm vào group
-    if [ "$EUID" -eq 0 ]; then
+    if [ "$(id -u)" -eq 0 ]; then
         info "Đang chạy với root, bỏ qua cấu hình Docker group."
         return
     fi
 
-    # Tạo group docker nếu chưa có
     if ! getent group docker &>/dev/null; then
         $SUDO groupadd docker
         info "Đã tạo group 'docker'."
     fi
 
-    # Thêm user hiện tại vào group
-    if id -nG "$USER" | grep -qw docker; then
-        info "User '$USER' đã thuộc group 'docker'."
+    if id -nG "$USER_NAME" | grep -qw docker; then
+        info "User '$USER_NAME' đã thuộc group 'docker'."
     else
-        $SUDO usermod -aG docker "$USER"
-        info "Đã thêm user '$USER' vào group 'docker'."
+        $SUDO usermod -aG docker "$USER_NAME"
+        info "Đã thêm user '$USER_NAME' vào group 'docker'."
         warn "Cần logout/login lại để chạy Docker không cần sudo."
     fi
 }
 
 # ============================================================
-# 6. Bật Docker service tự khởi động
+# Bật Docker service tự khởi động (systemd hoặc OpenRC)
 # ============================================================
 enable_docker_service() {
     header "Bật Docker service..."
 
-    $SUDO systemctl enable docker.service
-    $SUDO systemctl enable containerd.service
-    $SUDO systemctl start docker.service
-
-    if $SUDO systemctl is-active --quiet docker; then
-        info "Docker service đang chạy."
+    if [ -d /run/systemd/system ]; then
+        $SUDO systemctl enable --now containerd.service 2>/dev/null || true
+        $SUDO systemctl enable --now docker.service
+        if $SUDO systemctl is-active --quiet docker; then
+            info "Docker service đang chạy."
+        else
+            error "Docker service không thể khởi động!"
+        fi
+    elif command -v rc-update &>/dev/null; then
+        $SUDO rc-update add docker default
+        $SUDO rc-service docker start || warn "Không start được docker (OpenRC)."
     else
-        error "Docker service không thể khởi động!"
+        warn "Không phát hiện systemd/OpenRC (container?). Bỏ qua bật service."
     fi
 }
 
 # ============================================================
-# 7. Kiểm tra cài đặt
+# Kiểm tra cài đặt
 # ============================================================
 verify_installation() {
     header "Kiểm tra cài đặt..."
@@ -193,47 +215,15 @@ verify_installation() {
     docker --version
     echo ""
     info "Docker Compose version:"
-    docker compose version
-    echo ""
-    info "Containerd version:"
-    containerd --version 2>/dev/null || echo "  (không lấy được version)"
+    docker compose version 2>/dev/null || echo "  (không lấy được version)"
     echo ""
 
-    # Test chạy hello-world (cần sudo nếu chưa logout/login)
     info "Chạy test container hello-world..."
     if $SUDO docker run --rm hello-world >/dev/null 2>&1; then
         info "✓ Docker hoạt động bình thường!"
     else
         warn "Không thể chạy test container. Kiểm tra lại Docker service."
     fi
-}
-
-# ============================================================
-# Hỗ trợ Fedora / RHEL / CentOS
-# ============================================================
-install_docker_rpm() {
-    header "Cài đặt Docker Engine (RPM-based)..."
-
-    # Gỡ package cũ
-    $SUDO dnf remove -y docker docker-client docker-client-latest \
-        docker-common docker-latest docker-latest-logrotate \
-        docker-logrotate docker-engine podman runc 2>/dev/null || true
-
-    # Cài dependencies
-    $SUDO dnf install -y dnf-plugins-core
-
-    # Thêm repo
-    $SUDO dnf config-manager --add-repo "https://download.docker.com/linux/${DISTRO}/docker-ce.repo"
-
-    # Cài Docker
-    $SUDO dnf install -y \
-        docker-ce \
-        docker-ce-cli \
-        containerd.io \
-        docker-buildx-plugin \
-        docker-compose-plugin
-
-    info "Docker Engine đã được cài đặt: $(docker --version)"
 }
 
 # ============================================================
@@ -245,31 +235,19 @@ main() {
     echo "=========================================="
     echo ""
 
-    # Cảnh báo nếu chạy bằng root
-    if [ "$EUID" -eq 0 ]; then
+    if [ "$(id -u)" -eq 0 ]; then
         warn "Đang chạy với quyền root. Bỏ qua sudo."
     fi
 
+    pkg_detect || error "Không tìm thấy package manager hỗ trợ."
     detect_distro
 
-    case "$DISTRO" in
-        ubuntu|debian|linuxmint|pop)
-            remove_old_docker
-            install_dependencies
-            setup_docker_repo
-            install_docker_engine
-            ;;
-        fedora)
-            install_docker_rpm
-            ;;
-        centos|rhel|rocky|alma)
-            install_docker_rpm
-            ;;
-        *)
-            error "Distro '$DISTRO' chưa được hỗ trợ trong script này.
-       Xem hướng dẫn: https://docs.docker.com/engine/install/"
-            ;;
+    case "$INSTALL_METHOD" in
+        apt-repo) install_docker_apt ;;
+        rpm-repo) install_docker_rpm ;;
+        distro)   install_docker_distro ;;
     esac
+    info "Docker Engine đã được cài đặt: $(docker --version)"
 
     setup_docker_group
     enable_docker_service
@@ -281,13 +259,12 @@ main() {
     echo "=========================================="
     echo ""
     echo "  Đã cài đặt:"
-    echo "    - Docker Engine (docker-ce)"
-    echo "    - Docker CLI (docker-ce-cli)"
-    echo "    - Containerd (containerd.io)"
+    echo "    - Docker Engine + CLI"
+    echo "    - Containerd"
     echo "    - Docker Buildx"
-    echo "    - Docker Compose Plugin (v2)"
+    echo "    - Docker Compose (v2)"
     echo ""
-    if [ "$EUID" -ne 0 ]; then
+    if [ "$(id -u)" -ne 0 ]; then
         warn "Hãy logout và login lại để chạy Docker không cần sudo."
     fi
     echo ""

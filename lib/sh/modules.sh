@@ -4,7 +4,8 @@
 #
 # module.conf keys:
 #   label, hint, order, mode (tty|bg), default (on|off),
-#   sudo (comma-separated OS ids), requires (command name),
+#   sudo (comma-separated OS ids), requires / requires_<os> (command,
+#   "a|b" = any of them),
 #   linux / mac / windows (script file per OS), next (next-step hint)
 #
 # Requires: ROOT, OS_ID
@@ -28,7 +29,7 @@ load_modules() {
             id="$(basename "$(dirname "$conf")")"
             order="$(module_get "$id" order)"
             echo "${order:-999} $id"
-        done | sort -n | awk '{print $2}'
+        done | sort -n | cut -d' ' -f2
     ); do
         [ -n "$(module_get "$id" "$OS_ID")" ] && MODULE_IDS+=("$id")
     done
@@ -47,12 +48,16 @@ module_needs_sudo() {
 }
 
 # Required command missing -> empty output means OK
+# requires_<os> overrides requires; "a|b" = any of the commands is enough
 module_missing() {
-    local req
-    req="$(module_get "$1" requires)"
-    if [ -n "$req" ] && ! command -v "$req" >/dev/null 2>&1; then
-        echo "$req"
-    fi
+    local req cmd
+    req="$(module_get "$1" "requires_$OS_ID")"
+    [ -z "$req" ] && req="$(module_get "$1" requires)"
+    [ -z "$req" ] && return 0
+    for cmd in $(echo "$req" | tr '|' ' '); do
+        command -v "$cmd" >/dev/null 2>&1 && return 0
+    done
+    echo "$req" | sed 's/|/ hoặc /g'
 }
 
 module_hint() {

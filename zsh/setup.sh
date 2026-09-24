@@ -30,6 +30,11 @@ esac
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# shellcheck source=../lib/sh/pkg.sh
+. "$SCRIPT_DIR/../lib/sh/pkg.sh"
+require_sudo || exit 1
+USER_NAME="$(id -un)"
+
 # ============================================================
 # 1. Cài đặt Zsh
 # ============================================================
@@ -39,17 +44,7 @@ install_zsh() {
         info "Zsh đã được cài đặt: $(zsh --version)"
     else
         info "Đang cài đặt Zsh..."
-        if command -v apt &>/dev/null; then
-            sudo apt update && sudo apt install -y zsh
-        elif command -v dnf &>/dev/null; then
-            sudo dnf install -y zsh
-        elif command -v yum &>/dev/null; then
-            sudo yum install -y zsh
-        elif command -v pacman &>/dev/null; then
-            sudo pacman -S --noconfirm zsh
-        else
-            error "Không tìm thấy package manager phù hợp. Hãy cài Zsh thủ công."
-        fi
+        pkg_install zsh || error "Không cài được Zsh. Hãy cài thủ công."
         info "Zsh đã được cài đặt thành công: $(zsh --version)"
     fi
 }
@@ -62,7 +57,12 @@ set_default_shell() {
     local zsh_path
     zsh_path="$(command -v zsh)"
 
-    if [ "$SHELL" = "$zsh_path" ]; then
+    # Shell trong /etc/passwd (chính xác hơn $SHELL của session hiện tại)
+    local current_shell
+    current_shell="$(getent passwd "$USER_NAME" 2>/dev/null | cut -d: -f7)"
+    current_shell="${current_shell:-$SHELL}"
+
+    if [ "$current_shell" = "$zsh_path" ]; then
         info "Zsh đã là default shell."
     else
         info "Đặt Zsh ($zsh_path) làm default shell..."
@@ -70,10 +70,22 @@ set_default_shell() {
         # Đảm bảo zsh có trong /etc/shells
         if ! grep -qx "$zsh_path" /etc/shells 2>/dev/null; then
             warn "Thêm $zsh_path vào /etc/shells..."
-            echo "$zsh_path" | sudo tee -a /etc/shells >/dev/null
+            echo "$zsh_path" | $SUDO tee -a /etc/shells >/dev/null
         fi
 
-        chsh -s "$zsh_path"
+        # usermod (qua sudo) không hỏi lại mật khẩu như chsh.
+        # Alpine/minimal image không có sẵn -> cài package shadow.
+        if ! command -v usermod &>/dev/null && ! command -v chsh &>/dev/null; then
+            pkg_install shadow || true
+        fi
+        if command -v usermod &>/dev/null; then
+            $SUDO usermod -s "$zsh_path" "$USER_NAME"
+        elif command -v chsh &>/dev/null; then
+            chsh -s "$zsh_path"
+        else
+            warn "Không có usermod/chsh. Đổi shell thủ công: chsh -s $zsh_path"
+            return
+        fi
         info "Default shell đã được đổi sang Zsh. Hãy logout/login lại để có hiệu lực."
     fi
 }
@@ -87,6 +99,8 @@ install_ohmyzsh() {
         info "Oh My Zsh đã được cài đặt."
     else
         info "Đang cài đặt Oh My Zsh..."
+        pkg_ensure_cmd curl || error "Không cài được curl."
+        pkg_ensure_cmd git || error "Không cài được git."
         sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
         info "Oh My Zsh đã được cài đặt thành công."
     fi
@@ -101,14 +115,9 @@ install_fzf() {
         info "fzf đã được cài đặt."
     else
         info "Đang cài đặt fzf..."
-        if command -v apt &>/dev/null; then
-            sudo apt install -y fzf
-        elif command -v dnf &>/dev/null; then
-            sudo dnf install -y fzf
-        elif command -v pacman &>/dev/null; then
-            sudo pacman -S --noconfirm fzf
-        else
-            # Cài từ git nếu không có package manager
+        if ! pkg_install fzf; then
+            # Distro không có package fzf -> cài từ git
+            warn "Không cài được fzf qua package manager, cài từ git..."
             git clone --depth 1 https://github.com/junegunn/fzf.git ~/.fzf
             ~/.fzf/install --all
         fi

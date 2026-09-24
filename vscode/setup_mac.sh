@@ -29,6 +29,9 @@ case "$(uname -s)" in
 esac
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# shellcheck source=../lib/sh/pkg.sh
+. "$SCRIPT_DIR/../lib/sh/pkg.sh"
 EXTENSIONS_FILE="$SCRIPT_DIR/extensions.txt"
 SETTINGS_FILE="$SCRIPT_DIR/setting.json"
 
@@ -66,7 +69,7 @@ check_vscode() {
             ln -sf "$VSCODE_BIN" "$link_target"
         else
             warn "Cần quyền admin để tạo symlink. Nhập mật khẩu nếu được hỏi."
-            sudo ln -sf "$VSCODE_BIN" "$link_target"
+            $SUDO ln -sf "$VSCODE_BIN" "$link_target"
         fi
 
         # Kiểm tra lại

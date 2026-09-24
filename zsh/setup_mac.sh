@@ -30,6 +30,9 @@ esac
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# shellcheck source=../lib/sh/pkg.sh
+. "$SCRIPT_DIR/../lib/sh/pkg.sh"
+
 # ============================================================
 # Kiểm tra Homebrew
 # ============================================================
@@ -79,7 +82,7 @@ set_default_shell() {
         # Đảm bảo zsh có trong /etc/shells
         if ! grep -qx "$zsh_path" /etc/shells 2>/dev/null; then
             warn "Thêm $zsh_path vào /etc/shells..."
-            echo "$zsh_path" | sudo tee -a /etc/shells >/dev/null
+            echo "$zsh_path" | $SUDO tee -a /etc/shells >/dev/null
         fi
 
         chsh -s "$zsh_path"

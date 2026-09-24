@@ -57,10 +57,16 @@ switch ($_os) {
     default   { Err "He dieu hanh khong duoc ho tro: $_os" }
 }
 
-# Kiem tra OpenSSH co san khong
+. (Join-Path $PSScriptRoot '..\lib\ps\Pkg.ps1')
+
+# Kiem tra OpenSSH co san khong, thieu thi cai OpenSSH Client (can Admin)
 if (-not (Get-Command ssh-keygen -ErrorAction SilentlyContinue)) {
-    Err "Khong tim thay ssh-keygen. Hay cai OpenSSH:
+    Warn "Khong tim thay ssh-keygen."
+    if (-not (Install-OpenSshClient)) {
+        Err "Khong cai duoc OpenSSH Client. Cai thu cong:
     Settings > Apps > Optional Features > Add a feature > OpenSSH Client"
+    }
+    Info "Da cai OpenSSH Client."
 }
 
 # ============================================================

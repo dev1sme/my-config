@@ -86,7 +86,8 @@ next=Thêm public key vào GitHub: https://github.com/settings/keys
 | ---------- | ---------------------------------------------------------------- |
 | `mode`     | `tty` = script hỏi tương tác, `bg` = chạy nền có spinner + log   |
 | `sudo`     | OS cần sudo/Admin, phân cách dấu phẩy: `linux`, `mac`, `windows` |
-| `requires` | Lệnh bắt buộc có sẵn, thiếu thì module mặc định bỏ chọn          |
+| `requires` | Lệnh bắt buộc có sẵn, thiếu thì module mặc định bỏ chọn. `a\|b` = có 1 trong các lệnh là đủ |
+| `requires_<os>` | Ghi đè `requires` cho OS cụ thể, vd `requires_windows=code\|winget` |
 | `linux` / `mac` / `windows` | Script cho từng OS, bỏ trống = không hỗ trợ     |
 | `next`     | Gợi ý hiển thị sau khi cài xong                                  |
 
@@ -303,12 +304,13 @@ Cài đặt Docker Engine từ official repository, bao gồm Docker Compose v2 
 
 #### Distro hỗ trợ
 
-| Debian-based | RPM-based    |
-| ------------ | ------------ |
-| Ubuntu       | Fedora       |
-| Debian       | CentOS       |
-| Linux Mint   | RHEL         |
-| Pop!\_OS     | Rocky / Alma |
+| Nhóm          | Distro                                        | Cài qua                        |
+| ------------- | --------------------------------------------- | ------------------------------ |
+| Debian-based  | Ubuntu, Debian, Mint, Pop!\_OS, Zorin...      | Docker official apt repo       |
+| RPM-based     | Fedora, RHEL, CentOS, Rocky, AlmaLinux        | Docker official rpm repo       |
+| Arch-based    | Arch, Manjaro, EndeavourOS                    | `pacman` (package của distro)  |
+| SUSE          | openSUSE Tumbleweed / Leap, SLES              | `zypper` (package của distro)  |
+| Alpine        | Alpine (cần `apk add bash` trước)             | `apk` + OpenRC                 |
 
 #### Files
 
@@ -425,7 +427,8 @@ cd my-config
 
 ## 📋 Yêu cầu
 
-- **Linux:** Ubuntu/Debian/Fedora/CentOS
+- **Linux:** Debian/Ubuntu, Fedora/RHEL/Rocky/Alma, Arch, openSUSE, Alpine. Package manager tự nhận: `apt`, `dnf`, `yum`, `pacman`, `zypper`, `apk` (`lib/sh/pkg.sh`)
+- **Windows:** tự cài VS Code qua `winget` và OpenSSH Client (optional feature) nếu thiếu
 - **macOS:** macOS 10.15+ với Homebrew
 - **Windows:** Chỉ hỗ trợ SSH và VS Code (PowerShell). Zsh không có bản Windows native. Docker nên dùng WSL2 + Docker CLI + Windows Terminal.
 - `curl`, `git`

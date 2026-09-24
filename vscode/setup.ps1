@@ -37,6 +37,8 @@ $ScriptDir    = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $ExtensionsFile = Join-Path $ScriptDir "extensions.txt"
 $SettingsFile   = Join-Path $ScriptDir "setting.json"
 
+. (Join-Path $ScriptDir '..\lib\ps\Pkg.ps1')
+
 # ============================================================
 # VS Code settings path (Windows)
 # ============================================================
@@ -55,6 +57,7 @@ $VscodePaths = @(
 )
 
 function Check-Vscode {
+    param([switch]$AfterInstall)
     Header "Kiem tra VS Code..."
 
     if (Get-Command code -ErrorAction SilentlyContinue) {
@@ -93,6 +96,15 @@ function Check-Vscode {
         } else {
             Warn "Khong the xac nhan lenh 'code'. Thu dong lai PowerShell."
         }
+    } elseif (-not $AfterInstall) {
+        Warn "VS Code chua duoc cai dat."
+        if (Install-WingetPackage "Microsoft.VisualStudioCode") {
+            Info "Da cai VS Code qua winget."
+            Check-Vscode -AfterInstall
+            return
+        }
+        Err "Khong cai duoc VS Code qua winget.
+       Download: https://code.visualstudio.com/download"
     } else {
         Err "VS Code chua duoc cai dat. Hay cai VS Code truoc khi chay script nay.
        Download: https://code.visualstudio.com/download

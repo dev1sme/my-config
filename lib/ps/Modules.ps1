@@ -22,9 +22,13 @@ function Get-MyConfigModules([string]$Root, [string]$OsId = 'windows') {
         if (-not $conf[$OsId]) { continue }
 
         $id = Split-Path -Leaf $file.DirectoryName
+        # requires_<os> overrides requires; "a|b" = any of the commands is enough
         $missing = ''
-        if ($conf['requires'] -and -not (Get-Command $conf['requires'] -ErrorAction SilentlyContinue)) {
-            $missing = $conf['requires']
+        $req = $conf["requires_$OsId"]
+        if (-not $req) { $req = $conf['requires'] }
+        if ($req) {
+            $found = $req.Split('|') | Where-Object { Get-Command $_ -ErrorAction SilentlyContinue }
+            if (-not $found) { $missing = $req -replace '\|', ' hoặc ' }
         }
         $order = 999
         if ($conf['order']) { $order = [int]$conf['order'] }

@@ -4,6 +4,9 @@
 # Requires: ui.sh, modules.sh, env.sh
 # ============================================================
 
+# Module scripts check this to skip their own intro/outro (see ui_module_start)
+export MY_CONFIG_INSTALLER=1
+
 SUDO_KEEPALIVE_PID=""
 RESULTS=()
 LOG_DIR=""
@@ -95,11 +98,9 @@ print_summary() {
     done
     summary+=("" "${UI_DIM}Logs: $LOG_DIR${UI_RESET}")
     ui_note "Kết quả" "${summary[@]}"
-    printf '%s\n' "$UI_BAR"
 
     if [ "${#next[@]}" -gt 0 ]; then
         ui_note "Bước tiếp theo" "${next[@]}"
-        printf '%s\n' "$UI_BAR"
     fi
     return "$failed"
 }

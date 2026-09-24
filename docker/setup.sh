@@ -6,21 +6,18 @@
 
 set -e
 
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-info() { echo -e "${GREEN}[INFO]${NC} $1"; }
-warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
-error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
-header() { echo -e "${BLUE}[====]${NC} $1"; }
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# shellcheck source=../lib/sh/ui.sh
+. "$SCRIPT_DIR/../lib/sh/ui.sh"
 # shellcheck source=../lib/sh/pkg.sh
 . "$SCRIPT_DIR/../lib/sh/pkg.sh"
+
+info()   { ui_log "$1"; }
+warn()   { ui_log_warn "$1"; }
+error()  { ui_fail "$1"; }
+header() { ui_section "$1"; }
+
 require_sudo || exit 1
 USER_NAME="$(id -un)"
 
@@ -98,7 +95,7 @@ install_docker_apt() {
     info "Đã dọn dẹp các package Docker cũ."
 
     header "Cài đặt dependencies..."
-    pkg_install ca-certificates curl gnupg
+    ui_run pkg_install ca-certificates curl gnupg
     info "Dependencies đã sẵn sàng."
 
     header "Thêm Docker GPG key & repository..."
@@ -116,11 +113,11 @@ install_docker_apt() {
     arch="$(dpkg --print-architecture)"
     echo "deb [arch=${arch} signed-by=${gpg_key}] https://download.docker.com/linux/${DOCKER_REPO} ${APT_CODENAME} stable" |
         $SUDO tee /etc/apt/sources.list.d/docker.list >/dev/null
-    $SUDO apt-get update -y
+    ui_run $SUDO apt-get update -y
     info "Docker repository đã được thêm."
 
     header "Cài đặt Docker Engine..."
-    pkg_install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    ui_run pkg_install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 }
 
 # ============================================================
@@ -134,13 +131,13 @@ install_docker_rpm() {
 
     header "Thêm Docker repository..."
     # Tải thẳng file .repo: chạy được với cả dnf4, dnf5 (Fedora 41+) và yum
-    pkg_ensure_cmd curl
+    ui_run pkg_ensure_cmd curl
     $SUDO curl -fsSL "https://download.docker.com/linux/${DOCKER_REPO}/docker-ce.repo" \
         -o /etc/yum.repos.d/docker-ce.repo
     info "Docker repository đã được thêm."
 
     header "Cài đặt Docker Engine..."
-    pkg_install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    ui_run pkg_install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 }
 
 # ============================================================
@@ -149,9 +146,9 @@ install_docker_rpm() {
 install_docker_distro() {
     header "Cài đặt Docker Engine (package của distro)..."
     case "$PKG_MANAGER" in
-        pacman) pkg_install docker docker-compose docker-buildx ;;
-        zypper) pkg_install docker docker-compose docker-buildx ;;
-        apk)    pkg_install docker docker-cli-compose docker-cli-buildx ;;
+        pacman) ui_run pkg_install docker docker-compose docker-buildx ;;
+        zypper) ui_run pkg_install docker docker-compose docker-buildx ;;
+        apk)    ui_run pkg_install docker docker-cli-compose docker-cli-buildx ;;
         *)      error "Không hỗ trợ cài Docker qua $PKG_MANAGER." ;;
     esac
 }
@@ -190,7 +187,7 @@ enable_docker_service() {
 
     if [ -d /run/systemd/system ]; then
         $SUDO systemctl enable --now containerd.service 2>/dev/null || true
-        $SUDO systemctl enable --now docker.service
+        ui_run $SUDO systemctl enable --now docker.service
         if $SUDO systemctl is-active --quiet docker; then
             info "Docker service đang chạy."
         else
@@ -210,13 +207,8 @@ enable_docker_service() {
 verify_installation() {
     header "Kiểm tra cài đặt..."
 
-    echo ""
-    info "Docker version:"
-    docker --version
-    echo ""
-    info "Docker Compose version:"
-    docker compose version 2>/dev/null || echo "  (không lấy được version)"
-    echo ""
+    info "Docker: $(docker --version)"
+    info "Compose: $(docker compose version 2>/dev/null || echo 'không lấy được version')"
 
     info "Chạy test container hello-world..."
     if $SUDO docker run --rm hello-world >/dev/null 2>&1; then
@@ -230,16 +222,14 @@ verify_installation() {
 # Main
 # ============================================================
 main() {
-    echo "=========================================="
-    echo "  Docker Engine Setup Script"
-    echo "=========================================="
-    echo ""
+    ui_module_start "Docker Engine + Compose"
 
     if [ "$(id -u)" -eq 0 ]; then
-        warn "Đang chạy với quyền root. Bỏ qua sudo."
+        info "Đang chạy với quyền root, không dùng sudo."
     fi
 
     pkg_detect || error "Không tìm thấy package manager hỗ trợ."
+    header "Kiểm tra distro..."
     detect_distro
 
     case "$INSTALL_METHOD" in
@@ -253,23 +243,13 @@ main() {
     enable_docker_service
     verify_installation
 
-    echo ""
-    echo "=========================================="
-    info "Cài đặt Docker Engine hoàn tất!"
-    echo "=========================================="
-    echo ""
-    echo "  Đã cài đặt:"
-    echo "    - Docker Engine + CLI"
-    echo "    - Containerd"
-    echo "    - Docker Buildx"
-    echo "    - Docker Compose (v2)"
-    echo ""
+    ui_section "Hoàn tất"
+    ui_log "Đã cài: Docker Engine + CLI, containerd, Buildx, Compose v2"
+    ui_log "Lệnh test: docker run hello-world"
     if [ "$(id -u)" -ne 0 ]; then
-        warn "Hãy logout và login lại để chạy Docker không cần sudo."
+        warn "Logout/login lại để chạy Docker không cần sudo."
     fi
-    echo ""
-    echo "  Lệnh test: docker run hello-world"
-    echo ""
+    ui_module_end "Docker setup hoàn tất!"
 }
 
 main "$@"

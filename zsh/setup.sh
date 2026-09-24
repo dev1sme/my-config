@@ -6,16 +6,17 @@
 
 set -e
 
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-info()   { echo -e "${GREEN}[INFO]${NC} $1"; }
-warn()   { echo -e "${YELLOW}[WARN]${NC} $1"; }
-error()  { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
-header() { echo -e "${BLUE}[====]${NC} $1"; }
+# shellcheck source=../lib/sh/ui.sh
+. "$SCRIPT_DIR/../lib/sh/ui.sh"
+# shellcheck source=../lib/sh/pkg.sh
+. "$SCRIPT_DIR/../lib/sh/pkg.sh"
+
+info()   { ui_log "$1"; }
+warn()   { ui_log_warn "$1"; }
+error()  { ui_fail "$1"; }
+header() { ui_section "$1"; }
 
 # ============================================================
 # Kiểm tra hệ điều hành
@@ -28,10 +29,6 @@ case "$(uname -s)" in
     *)      error "Hệ điều hành không được hỗ trợ: $(uname -s)" ;;
 esac
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-# shellcheck source=../lib/sh/pkg.sh
-. "$SCRIPT_DIR/../lib/sh/pkg.sh"
 require_sudo || exit 1
 USER_NAME="$(id -un)"
 
@@ -44,7 +41,7 @@ install_zsh() {
         info "Zsh đã được cài đặt: $(zsh --version)"
     else
         info "Đang cài đặt Zsh..."
-        pkg_install zsh || error "Không cài được Zsh. Hãy cài thủ công."
+        ui_run pkg_install zsh || error "Không cài được Zsh. Hãy cài thủ công."
         info "Zsh đã được cài đặt thành công: $(zsh --version)"
     fi
 }
@@ -76,7 +73,7 @@ set_default_shell() {
         # usermod (qua sudo) không hỏi lại mật khẩu như chsh.
         # Alpine/minimal image không có sẵn -> cài package shadow.
         if ! command -v usermod &>/dev/null && ! command -v chsh &>/dev/null; then
-            pkg_install shadow || true
+            ui_run pkg_install shadow || true
         fi
         if command -v usermod &>/dev/null; then
             $SUDO usermod -s "$zsh_path" "$USER_NAME"
@@ -99,9 +96,9 @@ install_ohmyzsh() {
         info "Oh My Zsh đã được cài đặt."
     else
         info "Đang cài đặt Oh My Zsh..."
-        pkg_ensure_cmd curl || error "Không cài được curl."
-        pkg_ensure_cmd git || error "Không cài được git."
-        sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+        ui_run pkg_ensure_cmd curl || error "Không cài được curl."
+        ui_run pkg_ensure_cmd git || error "Không cài được git."
+        ui_run sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
         info "Oh My Zsh đã được cài đặt thành công."
     fi
 }
@@ -115,11 +112,11 @@ install_fzf() {
         info "fzf đã được cài đặt."
     else
         info "Đang cài đặt fzf..."
-        if ! pkg_install fzf; then
+        if ! ui_run pkg_install fzf; then
             # Distro không có package fzf -> cài từ git
             warn "Không cài được fzf qua package manager, cài từ git..."
-            git clone --depth 1 https://github.com/junegunn/fzf.git ~/.fzf
-            ~/.fzf/install --all
+            ui_run git clone -q --depth 1 https://github.com/junegunn/fzf.git ~/.fzf
+            ui_run ~/.fzf/install --all
         fi
         info "fzf đã được cài đặt thành công."
     fi
@@ -137,7 +134,7 @@ install_plugins() {
         info "Plugin zsh-autosuggestions đã tồn tại."
     else
         info "Đang cài đặt zsh-autosuggestions..."
-        git clone https://github.com/zsh-users/zsh-autosuggestions "$ZSH_CUSTOM/plugins/zsh-autosuggestions"
+        ui_run git clone -q https://github.com/zsh-users/zsh-autosuggestions "$ZSH_CUSTOM/plugins/zsh-autosuggestions"
         info "zsh-autosuggestions đã được cài đặt."
     fi
 
@@ -146,7 +143,7 @@ install_plugins() {
         info "Plugin zsh-syntax-highlighting đã tồn tại."
     else
         info "Đang cài đặt zsh-syntax-highlighting..."
-        git clone https://github.com/zsh-users/zsh-syntax-highlighting "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting"
+        ui_run git clone -q https://github.com/zsh-users/zsh-syntax-highlighting "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting"
         info "zsh-syntax-highlighting đã được cài đặt."
     fi
 
@@ -180,10 +177,7 @@ copy_zshrc() {
 # Main
 # ============================================================
 main() {
-    echo "=========================================="
-    echo "  Zsh + Oh My Zsh Setup Script"
-    echo "=========================================="
-    echo ""
+    ui_module_start "Zsh + Oh My Zsh"
 
     install_zsh
     set_default_shell
@@ -192,25 +186,12 @@ main() {
     install_plugins
     copy_zshrc
 
-    echo ""
-    echo "=========================================="
-    info "Cài đặt hoàn tất!"
-    echo "=========================================="
-    echo ""
-    echo "Plugins đã cài đặt:"
-    echo "  - git (built-in)"
-    echo "  - zsh-autosuggestions (external)"
-    echo "  - docker (built-in)"
-    echo "  - docker-compose (built-in)"
-    echo "  - history (built-in)"
-    echo "  - rsync (built-in)"
-    echo "  - safe-paste (built-in)"
-    echo "  - fzf (built-in + fzf binary)"
-    echo "  - zsh-syntax-highlighting (external)"
-    echo ""
-    echo "Theme: strug"
-    echo ""
-    warn "Hãy logout và login lại (hoặc chạy 'exec zsh') để áp dụng cấu hình mới."
+    ui_section "Hoàn tất"
+    ui_log "Plugins: git, zsh-autosuggestions, zsh-syntax-highlighting, docker,"
+    ui_log "         docker-compose, history, rsync, safe-paste, fzf"
+    ui_log "Theme: strug"
+    ui_log_warn "Logout/login lại (hoặc chạy 'exec zsh') để áp dụng cấu hình mới."
+    ui_module_end "Zsh setup hoàn tất!"
 }
 
 main "$@"

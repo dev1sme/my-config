@@ -124,6 +124,16 @@ function Read-UiKey {
 
 function Write-UiBar { Write-Ui $script:UiBar }
 
+# Blocks (step, note, prompt...) end with a │ spacer; a section does not.
+# Close an open section with a spacer before the next block starts.
+$script:UiSectionOpen = $false
+function Open-UiBlock {
+    if ($script:UiSectionOpen) {
+        Write-UiBar
+        $script:UiSectionOpen = $false
+    }
+}
+
 function Write-UiIntro([string]$Title) {
     Write-Ui ''
     Write-Ui "$($C.Gray)$($G.Top)$($C.Reset)  $($C.Inv) $Title $($C.Reset)"
@@ -136,11 +146,11 @@ function Write-UiOutro([string]$Message) {
 }
 
 function Write-UiLine([string]$Text)   { Write-Ui "$script:UiBar  $Text" }
-function Write-UiActive([string]$Text) { Write-Ui "$($C.Cyan)$($G.Active)$($C.Reset)  $Text" }
-function Write-UiStep([string]$Text)   { Write-Ui "$($C.Green)$($G.Done)$($C.Reset)  $Text"; Write-UiBar }
-function Write-UiInfo([string]$Text)   { Write-Ui "$($C.Blue)$($G.Info)$($C.Reset)  $Text"; Write-UiBar }
-function Write-UiWarn([string]$Text)   { Write-Ui "$($C.Yellow)$($G.Warn)$($C.Reset)  $Text"; Write-UiBar }
-function Write-UiError([string]$Text)  { Write-Ui "$($C.Red)$($G.Error)$($C.Reset)  $Text"; Write-UiBar }
+function Write-UiActive([string]$Text) { Open-UiBlock; Write-Ui "$($C.Cyan)$($G.Active)$($C.Reset)  $Text" }
+function Write-UiStep([string]$Text)   { Open-UiBlock; Write-Ui "$($C.Green)$($G.Done)$($C.Reset)  $Text"; Write-UiBar }
+function Write-UiInfo([string]$Text)   { Open-UiBlock; Write-Ui "$($C.Blue)$($G.Info)$($C.Reset)  $Text"; Write-UiBar }
+function Write-UiWarn([string]$Text)   { Open-UiBlock; Write-Ui "$($C.Yellow)$($G.Warn)$($C.Reset)  $Text"; Write-UiBar }
+function Write-UiError([string]$Text)  { Open-UiBlock; Write-Ui "$($C.Red)$($G.Error)$($C.Reset)  $Text"; Write-UiBar }
 
 # Print a cancel line and exit the current script
 function Stop-UiCancel([string]$Message = 'Đã huỷ.', [int]$Code = 130) {
@@ -150,8 +160,9 @@ function Stop-UiCancel([string]$Message = 'Đã huỷ.', [int]$Code = 130) {
     exit $Code
 }
 
-# Boxed note
+# Boxed note (ends with a │ spacer)
 function Write-UiNote([string]$Title, [string[]]$Lines) {
+    Open-UiBlock
     $width = Get-UiWidth $Title
     foreach ($line in $Lines) {
         $len = Get-UiWidth $line
@@ -169,4 +180,80 @@ function Write-UiNote([string]$Title, [string[]]$Lines) {
     }
     Write-Ui "$gray$($G.Bar)$reset$blank$gray$($G.Bar)$reset"
     Write-Ui "$gray$($G.Tee)$($G.H * ($width + 4))$($G.BottomRight)$reset"
+    Write-UiBar
+}
+
+# ------------------------------------------------------------
+# Module output (inside the │ rail of the installer)
+#
+#   Start-UiModule "title"      ┌ title   (only when run standalone)
+#   Write-UiSection "title"     ◇ title
+#   Write-UiLog / Write-UiLogWarn / Write-UiLogError "msg"
+#   Invoke-UiRun { native.exe args }   -> exit code, output indented
+#   Stop-UiFail "msg"           error + exit
+#   Complete-UiModule "msg"     └ msg     (only when run standalone)
+#
+# The installer sets MY_CONFIG_INSTALLER=1 and draws intro/outro itself.
+# ------------------------------------------------------------
+
+function Test-UiStandalone { return -not $env:MY_CONFIG_INSTALLER }
+
+function Start-UiModule([string]$Title) {
+    if (Test-UiStandalone) { Write-UiIntro $Title }
+    $script:UiSectionOpen = $false
+}
+
+function Complete-UiModule([string]$Message) {
+    if (Test-UiStandalone) {
+        Open-UiBlock
+        Write-UiOutro $Message
+    }
+}
+
+function Write-UiSection([string]$Title) {
+    if ($script:UiSectionOpen) { Write-UiBar }
+    Write-Ui "$($C.Green)$($G.Done)$($C.Reset)  $Title"
+    $script:UiSectionOpen = $true
+}
+
+# Multi-line message inside the rail; continuation lines drop source indentation
+function Write-UiLogLines([string]$Marker, [string]$Color, [string]$Text) {
+    $script:UiSectionOpen = $true
+    $pad = ' ' * (Get-UiWidth $Marker)
+    $first = $true
+    foreach ($line in ($Text -split "`r?`n")) {
+        if ($first) {
+            Write-Ui "$script:UiBar  $Color$Marker$line$($C.Reset)"
+            $first = $false
+        } else {
+            Write-Ui "$script:UiBar  $Color$pad$($line.TrimStart())$($C.Reset)"
+        }
+    }
+}
+
+function Write-UiLog([string]$Text)      { Write-UiLogLines '' '' $Text }
+function Write-UiLogWarn([string]$Text)  { Write-UiLogLines "$($G.Warn) " $C.Yellow $Text }
+function Write-UiLogError([string]$Text) { Write-UiLogLines "$($G.Error) " $C.Red $Text }
+
+function Stop-UiFail([string]$Message, [int]$Code = 1) {
+    Write-UiLogError $Message
+    if (Test-UiStandalone) {
+        Open-UiBlock
+        Write-UiOutro "$($C.Red)Thất bại$($C.Reset)"
+    }
+    exit $Code
+}
+
+# Run a native command with its output (stdout + stderr) indented in the rail
+# Usage: $rc = Invoke-UiRun { ssh-add $keyFile }
+function Invoke-UiRun([scriptblock]$Command) {
+    # Native stderr must not become a terminating error under EAP=Stop (PS 5.1)
+    $ErrorActionPreference = 'Continue'
+    $global:LASTEXITCODE = 0
+    & $Command 2>&1 | ForEach-Object {
+        Write-UiLog "$($C.Dim)$(([string]$_).TrimEnd())$($C.Reset)"
+    }
+    $rc = $global:LASTEXITCODE
+    $script:UiSectionOpen = $true
+    return $rc
 }

@@ -15,7 +15,7 @@ my-config/
 │   │   ├── runner.sh       # sudo keepalive, chạy module, tổng kết
 │   │   ├── pkg.sh          # Package manager: apt/dnf/yum/pacman/zypper/apk/brew
 │   │   └── banner.sh
-│   └── ps/                 # PowerShell 5.1+ (UTF-8 BOM trừ Pkg.ps1)
+│   └── ps/                 # PowerShell 5.1+ (UTF-8 BOM)
 │       ├── Main.ps1        # Flow chính Windows
 │       ├── UI.ps1          # Loader: UI.Core, UI.Prompt, UI.Spinner
 │       ├── Pkg.ps1         # winget, OpenSSH Client
@@ -66,6 +66,7 @@ $SUDO tee -a /etc/shells     # "" khi root, "sudo" khi user thường
 ```
 
 ```powershell
+. (Join-Path $PSScriptRoot '..\lib\ps\UI.ps1')
 . (Join-Path $PSScriptRoot '..\lib\ps\Pkg.ps1')
 
 Install-WingetPackage 'Microsoft.VisualStudioCode'

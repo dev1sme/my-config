@@ -70,7 +70,6 @@ try {
         $plan += "$($C.Cyan)$($G.Bullet)$($C.Reset) $($m.Label) $($C.Dim)$($G.Dash) $how$($C.Reset)"
     }
     Write-UiNote 'Kế hoạch' $plan
-    Write-UiBar
 
     if (-not $Yes -and $script:UiInteractive) {
         $ok = Read-UiConfirm 'Bắt đầu cài đặt?'

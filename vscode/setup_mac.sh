@@ -6,16 +6,17 @@
 
 set -e
 
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-info() { echo -e "${GREEN}[INFO]${NC} $1"; }
-warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
-error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
-header() { echo -e "${BLUE}[====]${NC} $1"; }
+# shellcheck source=../lib/sh/ui.sh
+. "$SCRIPT_DIR/../lib/sh/ui.sh"
+# shellcheck source=../lib/sh/pkg.sh
+. "$SCRIPT_DIR/../lib/sh/pkg.sh"
+
+info()   { ui_log "$1"; }
+warn()   { ui_log_warn "$1"; }
+error()  { ui_fail "$1"; }
+header() { ui_section "$1"; }
 
 # ============================================================
 # Kiểm tra hệ điều hành
@@ -28,10 +29,6 @@ case "$(uname -s)" in
     *)      error "Hệ điều hành không được hỗ trợ: $(uname -s)" ;;
 esac
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-# shellcheck source=../lib/sh/pkg.sh
-. "$SCRIPT_DIR/../lib/sh/pkg.sh"
 EXTENSIONS_FILE="$SCRIPT_DIR/extensions.txt"
 SETTINGS_FILE="$SCRIPT_DIR/setting.json"
 
@@ -81,7 +78,7 @@ check_vscode() {
             export PATH="$(dirname "$VSCODE_BIN"):$PATH"
             info "Đã thêm vào PATH cho session hiện tại."
             warn "Thêm dòng sau vào ~/.zshrc hoặc ~/.bash_profile để dùng lâu dài:"
-            echo "    export PATH=\"\$(dirname '$VSCODE_BIN'):\$PATH\""
+            ui_log "    export PATH=\"\$(dirname '$VSCODE_BIN'):\$PATH\""
         fi
     else
         error "VS Code chưa được cài đặt. Hãy cài VS Code trước khi chạy script này.
@@ -120,23 +117,20 @@ install_extensions() {
 
         # Kiểm tra extension đã cài chưa (case-insensitive)
         if echo "$current_extensions" | grep -qi "^${ext}$"; then
-            info "✓ Đã có: $ext"
+            ui_log "${UI_DIM}✓ Đã có: $ext${UI_RESET}"
             skipped=$((skipped + 1))
         else
-            echo -n "  Đang cài: $ext ... "
             if code --install-extension "$ext" --force >/dev/null 2>&1; then
-                echo -e "${GREEN}OK${NC}"
+                ui_log "${UI_GREEN}✔${UI_RESET} Đã cài: $ext"
                 installed=$((installed + 1))
             else
-                echo -e "${RED}FAILED${NC}"
+                ui_log_error "Lỗi: $ext"
                 failed=$((failed + 1))
             fi
         fi
     done < "$EXTENSIONS_FILE"
 
-    echo ""
-    info "Tổng kết Extensions:"
-    echo "  Tổng: $total | Đã có: $skipped | Mới cài: $installed | Lỗi: $failed"
+    info "Tổng: $total · Đã có: $skipped · Mới cài: $installed · Lỗi: $failed"
 }
 
 # ============================================================
@@ -195,10 +189,7 @@ show_help() {
 }
 
 main() {
-    echo "=========================================="
-    echo "  VS Code Setup Script (macOS)"
-    echo "=========================================="
-    echo ""
+    ui_module_start "VS Code (macOS)"
 
     check_vscode
 
@@ -207,7 +198,6 @@ main() {
     case "$action" in
         --all)
             install_extensions
-            echo ""
             setup_settings
             ;;
         --extensions)
@@ -230,10 +220,7 @@ main() {
             ;;
     esac
 
-    echo ""
-    echo "=========================================="
-    info "Hoàn tất! Khởi động lại VS Code để áp dụng thay đổi."
-    echo "=========================================="
+    ui_module_end "Hoàn tất! Khởi động lại VS Code để áp dụng thay đổi."
 }
 
 main "$@"

@@ -173,7 +173,6 @@ confirm_plan() {
         plan+=("${UI_CYAN}•${UI_RESET} $(module_label "$id") ${UI_DIM}— ${how}${UI_RESET}")
     done
     ui_note "Kế hoạch" "${plan[@]}"
-    printf '%s\n' "$UI_BAR"
 
     if [ "$OPT_YES" -eq 0 ] && ui_has_tty; then
         ui_confirm "Bắt đầu cài đặt?" y || ui_cancel "Đã huỷ, chưa thay đổi gì."

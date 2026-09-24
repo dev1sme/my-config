@@ -5,6 +5,7 @@
 
 # Collapsed view of an answered prompt
 function Write-UiAnswered([string]$Question, [string]$Answer) {
+    Open-UiBlock
     Write-Ui "$($C.Green)$($G.Done)$($C.Reset)  $Question"
     Write-Ui "$script:UiBar  $($C.Dim)$Answer$($C.Reset)"
     Write-UiBar
@@ -28,6 +29,17 @@ function Read-UiMultiSelect([string]$Question, [string[]]$Options) {
     }
     $n = $labels.Count
     $cur = 0; $drawn = 0
+
+    # No terminal: keep the default selection
+    if (-not $script:UiInteractive) {
+        $result = @(); $names = @()
+        for ($i = 0; $i -lt $n; $i++) {
+            if ($sel[$i] -eq 1) { $result += $i; $names += $labels[$i] }
+        }
+        Write-UiAnswered $Question $(if ($names.Count) { $names -join ', ' } else { '(không chọn)' })
+        return , $result
+    }
+
     $help = "$([char]0x2191)/$([char]0x2193) di chuyển $($G.Dot) space chọn $($G.Dot) a chọn tất cả $($G.Dot) enter xác nhận"
     if (-not $script:UiUnicode) { $help = 'up/down di chuyen - space chon - a chon tat ca - enter xac nhan' }
     $footer = $help
@@ -101,6 +113,11 @@ function Read-UiSelect([string]$Question, [string[]]$Options) {
     $n = $labels.Count
     $cur = 0; $drawn = 0
 
+    if (-not $script:UiInteractive) {
+        Write-UiAnswered $Question $labels[0]
+        return 0
+    }
+
     Set-UiCursor $false
     while ($true) {
         Clear-UiLines $drawn
@@ -142,6 +159,11 @@ function Read-UiConfirm([string]$Question, [switch]$DefaultNo) {
     $yes = -not $DefaultNo
     $drawn = 0
 
+    if (-not $script:UiInteractive) {
+        Write-UiAnswered $Question $(if ($yes) { 'Có' } else { 'Không' })
+        return $yes
+    }
+
     Set-UiCursor $false
     while ($true) {
         Clear-UiLines $drawn
@@ -179,6 +201,10 @@ function Read-UiConfirm([string]$Question, [switch]$DefaultNo) {
 # Free text input
 # Usage: Read-UiText "Question" [default]
 function Read-UiText([string]$Question, [string]$Default = '') {
+    if (-not $script:UiInteractive) {
+        Write-UiAnswered $Question $(if ($Default) { $Default } else { '(trống)' })
+        return $Default
+    }
     Write-UiActive $Question
     if ($Default) {
         Write-Ui "$($C.Cyan)$($G.Bar)$($C.Reset)  $($C.Dim)($Default)$($C.Reset) " -NoNewline

@@ -97,12 +97,22 @@ ui_outro() {
     printf '%s└%s  %s\n\n' "$UI_GRAY" "$UI_RESET" "$1"
 }
 
+# Blocks (step, note, prompt...) end with a │ spacer; a ui_section does not.
+# Close an open section with a spacer before the next block starts.
+_UI_SECTION_OPEN=0
+_ui_block_begin() {
+    if [ "$_UI_SECTION_OPEN" -eq 1 ]; then
+        printf '%s\n' "$UI_BAR"
+        _UI_SECTION_OPEN=0
+    fi
+}
+
 ui_line()    { printf '%s  %s\n' "$UI_BAR" "$1"; }
-ui_step()    { printf '%s◇%s  %s\n%s\n' "$UI_GREEN" "$UI_RESET" "$1" "$UI_BAR"; }
-ui_info()    { printf '%s●%s  %s\n%s\n' "$UI_BLUE" "$UI_RESET" "$1" "$UI_BAR"; }
-ui_warn()    { printf '%s▲%s  %s\n%s\n' "$UI_YELLOW" "$UI_RESET" "$1" "$UI_BAR"; }
-ui_error()   { printf '%s■%s  %s\n%s\n' "$UI_RED" "$UI_RESET" "$1" "$UI_BAR"; }
-ui_active()  { printf '%s◆%s  %s\n' "$UI_CYAN" "$UI_RESET" "$1"; }
+ui_step()    { _ui_block_begin; printf '%s◇%s  %s\n%s\n' "$UI_GREEN" "$UI_RESET" "$1" "$UI_BAR"; }
+ui_info()    { _ui_block_begin; printf '%s●%s  %s\n%s\n' "$UI_BLUE" "$UI_RESET" "$1" "$UI_BAR"; }
+ui_warn()    { _ui_block_begin; printf '%s▲%s  %s\n%s\n' "$UI_YELLOW" "$UI_RESET" "$1" "$UI_BAR"; }
+ui_error()   { _ui_block_begin; printf '%s■%s  %s\n%s\n' "$UI_RED" "$UI_RESET" "$1" "$UI_BAR"; }
+ui_active()  { _ui_block_begin; printf '%s◆%s  %s\n' "$UI_CYAN" "$UI_RESET" "$1"; }
 
 # Print a cancel line and exit
 ui_cancel() {
@@ -111,7 +121,7 @@ ui_cancel() {
     exit "${2:-130}"
 }
 
-# Boxed note
+# Boxed note (ends with a │ spacer)
 #   ◇  Title ──────╮
 #   │              │
 #   │  line        │
@@ -130,6 +140,7 @@ ui_note() {
 
     local blank
     blank="$(_ui_repeat ' ' $((width + 4)))"
+    _ui_block_begin
     printf '%s◇%s  %s %s%s╮%s\n' "$UI_GREEN" "$UI_RESET" "$title" \
         "$UI_GRAY" "$(_ui_repeat '─' $((width + 1 - tlen)))" "$UI_RESET"
     printf '%s│%s%s%s│%s\n' "$UI_GRAY" "$UI_RESET" "$blank" "$UI_GRAY" "$UI_RESET"
@@ -140,4 +151,91 @@ ui_note() {
     done
     printf '%s│%s%s%s│%s\n' "$UI_GRAY" "$UI_RESET" "$blank" "$UI_GRAY" "$UI_RESET"
     printf '%s├%s╯%s\n' "$UI_GRAY" "$(_ui_repeat '─' $((width + 4)))" "$UI_RESET"
+    printf '%s\n' "$UI_BAR"
+}
+
+# ------------------------------------------------------------
+# Module output (inside the │ rail of the installer)
+#
+#   ui_module_start "title"   ┌ title   (only when run standalone)
+#   ui_section "title"        ◇ title
+#   ui_log / ui_log_warn / ui_log_error "msg"
+#   cmd 2>&1 | ui_indent      dim command output inside the rail
+#   ui_module_end "msg"       └ msg     (only when run standalone)
+#
+# The installer exports MY_CONFIG_INSTALLER=1 and draws intro/outro itself.
+# ------------------------------------------------------------
+ui_is_standalone() { [ -z "${MY_CONFIG_INSTALLER:-}" ]; }
+
+ui_module_start() {
+    if ui_is_standalone; then
+        ui_intro "$1"
+    fi
+    _UI_SECTION_OPEN=0
+}
+
+ui_module_end() {
+    if ui_is_standalone; then
+        _ui_block_begin
+        ui_outro "$1"
+    fi
+}
+
+ui_section() {
+    if [ "$_UI_SECTION_OPEN" -eq 1 ]; then
+        printf '%s\n' "$UI_BAR"
+    fi
+    printf '%s◇%s  %s\n' "$UI_GREEN" "$UI_RESET" "$1"
+    _UI_SECTION_OPEN=1
+}
+
+# Print a (possibly multi-line) message inside the rail
+# Usage: _ui_log_lines "<first-line marker>" "<color>" "text"
+_ui_log_lines() {
+    local marker="$1" color="$2" line first=1 pad
+    _UI_SECTION_OPEN=1
+    pad="$(_ui_repeat ' ' "$(_ui_width "$marker")")"
+    while IFS= read -r line || [ -n "$line" ]; do
+        if [ "$first" -eq 1 ]; then
+            printf '%s  %s%s%s%s\n' "$UI_BAR" "$color" "$marker" "$line" "$UI_RESET"
+            first=0
+        else
+            # continuation lines: drop the source indentation, align under the text
+            line="${line#"${line%%[![:space:]]*}"}"
+            printf '%s  %s%s%s%s\n' "$UI_BAR" "$color" "$pad" "$line" "$UI_RESET"
+        fi
+    done <<<"$3"
+}
+
+ui_log()       { _ui_log_lines "" "" "$1"; }
+ui_log_warn()  { _ui_log_lines "▲ " "$UI_YELLOW" "$1"; }
+ui_log_error() { _ui_log_lines "■ " "$UI_RED" "$1"; }
+
+# Print an error inside the rail and exit
+ui_fail() {
+    ui_log_error "$1"
+    if ui_is_standalone; then
+        _UI_SECTION_OPEN=1
+        _ui_block_begin
+        ui_outro "${UI_RED}Thất bại${UI_RESET}"
+    fi
+    exit "${2:-1}"
+}
+
+# Prefix piped command output with the rail (strips carriage-return progress)
+ui_indent() {
+    local line
+    while IFS= read -r line || [ -n "$line" ]; do
+        line="${line##*$'\r'}"
+        printf '%s  %s%s%s\n' "$UI_BAR" "$UI_DIM" "$line" "$UI_RESET"
+    done
+}
+
+# Run a command with its output indented in the rail, keep its exit code
+# Usage: ui_run apt-get install -y zsh
+ui_run() {
+    "$@" 2>&1 | ui_indent
+    local rc="${PIPESTATUS[0]}"
+    _UI_SECTION_OPEN=1
+    return "$rc"
 }

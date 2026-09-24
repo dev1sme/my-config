@@ -1,48 +1,28 @@
-# ============================================================
+﻿# ============================================================
 # SSH Key Setup Script - Windows
-# Tao SSH key pair, cau hinh ssh-agent va ~/.ssh/config
-# Yeu cau: Windows 10 1809+ / Windows 11 (OpenSSH built-in)
-# Chay: PowerShell 5.1+ hoac PowerShell 7+
+# Tạo SSH key pair, cấu hình ssh-agent và ~/.ssh/config
+# Yêu cầu: Windows 10 1809+ / Windows 11 (OpenSSH built-in)
+# Chạy: PowerShell 5.1+ hoặc PowerShell 7+
+# File lưu UTF-8 with BOM để PowerShell 5.1 đọc đúng tiếng Việt.
 # ============================================================
 
 #Requires -Version 5.1
 
 $ErrorActionPreference = "Stop"
 
-# ============================================================
-# Colors / helpers
-# ============================================================
-function Info   { param($msg) Write-Host "[INFO] $msg" -ForegroundColor Green }
-function Warn   { param($msg) Write-Host "[WARN] $msg" -ForegroundColor Yellow }
-function Err    { param($msg) Write-Host "[ERROR] $msg" -ForegroundColor Red; exit 1 }
-function Header { param($msg) Write-Host "[====] $msg" -ForegroundColor Cyan }
+. (Join-Path $PSScriptRoot '..\lib\ps\UI.ps1')
+. (Join-Path $PSScriptRoot '..\lib\ps\Pkg.ps1')
 
-function Prompt-Input {
-    param([string]$Question, [string]$Default = "")
-    if ($Default) {
-        Write-Host -NoNewline "  ? $Question [$Default]: " -ForegroundColor Cyan
-    } else {
-        Write-Host -NoNewline "  ? $Question : " -ForegroundColor Cyan
-    }
-    $reply = Read-Host
-    if ([string]::IsNullOrWhiteSpace($reply)) { $reply = $Default }
-    return $reply
-}
-
-function Prompt-YN {
-    param([string]$Question, [string]$Default = "y")
-    $hint = if ($Default -eq "y") { "Y/n" } else { "y/N" }
-    Write-Host -NoNewline "  ? $Question [$hint]: " -ForegroundColor Cyan
-    $reply = Read-Host
-    if ([string]::IsNullOrWhiteSpace($reply)) { $reply = $Default }
-    return $reply -match "^[Yy]"
-}
+function Info   { param($msg) Write-UiLog $msg }
+function Warn   { param($msg) Write-UiLogWarn $msg }
+function Err    { param($msg) Stop-UiFail $msg }
+function Header { param($msg) Write-UiSection $msg }
 
 # ============================================================
-# Kiem tra he dieu hanh
+# Kiểm tra hệ điều hành
 # ============================================================
-# $IsWindows / $IsMacOS / $IsLinux co san tu PowerShell 6+
-# PS 5.1 chi chay tren Windows nen mac dinh la OK
+# $IsWindows / $IsMacOS / $IsLinux có sẵn từ PowerShell 6+
+# PS 5.1 chỉ chạy trên Windows nên mặc định là OK
 $_os = if ($PSVersionTable.PSVersion.Major -ge 6) {
     if     ($IsWindows) { "Windows" }
     elseif ($IsMacOS)   { "macOS" }
@@ -52,21 +32,9 @@ $_os = if ($PSVersionTable.PSVersion.Major -ge 6) {
 
 switch ($_os) {
     "Windows" { }  # OK
-    "macOS"   { Err "Ban dang dung macOS. Hay chay: ./ssh/setup_mac.sh" }
-    "Linux"   { Err "Ban dang dung Linux. Hay chay: ./ssh/setup.sh" }
-    default   { Err "He dieu hanh khong duoc ho tro: $_os" }
-}
-
-. (Join-Path $PSScriptRoot '..\lib\ps\Pkg.ps1')
-
-# Kiem tra OpenSSH co san khong, thieu thi cai OpenSSH Client (can Admin)
-if (-not (Get-Command ssh-keygen -ErrorAction SilentlyContinue)) {
-    Warn "Khong tim thay ssh-keygen."
-    if (-not (Install-OpenSshClient)) {
-        Err "Khong cai duoc OpenSSH Client. Cai thu cong:
-    Settings > Apps > Optional Features > Add a feature > OpenSSH Client"
-    }
-    Info "Da cai OpenSSH Client."
+    "macOS"   { Err "Bạn đang dùng macOS. Hãy chạy: ./ssh/setup_mac.sh" }
+    "Linux"   { Err "Bạn đang dùng Linux. Hãy chạy: ./ssh/setup.sh" }
+    default   { Err "Hệ điều hành không được hỗ trợ: $_os" }
 }
 
 # ============================================================
@@ -78,100 +46,63 @@ $KeyComment = ""
 $AddToAgent = $true
 
 # ============================================================
-# Buoc 0: Thu thap cau hinh (interactive)
+# 0. Kiểm tra OpenSSH, thiếu thì cài OpenSSH Client (cần Admin)
 # ============================================================
-function Collect-Config {
-    Write-Host ""
-    Write-Host "============================================================" -ForegroundColor Cyan
-    Write-Host "  Cau hinh SSH Key (Windows)" -ForegroundColor Cyan
-    Write-Host "============================================================" -ForegroundColor Cyan
-    Write-Host ""
-
-    # --- Key type ---
-    Write-Host "  Loai key duoc ho tro:"
-    Write-Host "    1) ed25519  " -NoNewline; Write-Host "(khuyen dung)" -ForegroundColor Green
-    Write-Host "    2) rsa      (4096-bit)"
-    Write-Host -NoNewline "  ? Chon loai key [1]: " -ForegroundColor Cyan
-    $choice = Read-Host
-    $script:KeyType = if ($choice -eq "2" -or $choice -eq "rsa") { "rsa" } else { "ed25519" }
-    Info "Loai key: $script:KeyType"
-    Write-Host ""
-
-    # --- Key file ---
-    $defaultName = if ($script:KeyType -eq "rsa") { "id_rsa" } else { "id_ed25519" }
-    Write-Host "  " -NoNewline
-    Write-Host "Tip:" -NoNewline -ForegroundColor Yellow
-    Write-Host " Dat ten rieng neu ban co nhieu key, vd: " -NoNewline
-    Write-Host "id_github" -NoNewline -ForegroundColor Yellow
-    Write-Host ", " -NoNewline
-    Write-Host "id_work" -ForegroundColor Yellow
-    $name = Prompt-Input "Ten file key (luu vao $env:USERPROFILE\.ssh\)" $defaultName
-    $script:KeyFile = "$env:USERPROFILE\.ssh\$name"
-    Info "File key: $script:KeyFile"
-    Write-Host ""
-
-    # --- Comment ---
-    Write-Host "  " -NoNewline
-    Write-Host "Tip:" -NoNewline -ForegroundColor Yellow
-    Write-Host " Nen dung email de de nhan dien key, vd: " -NoNewline
-    Write-Host "you@example.com" -ForegroundColor Yellow
-    $script:KeyComment = Prompt-Input "Comment / email cho key" ""
-    Info "Comment: $script:KeyComment"
-    Write-Host ""
-
-    # --- Add to agent ---
-    Write-Host ""
-    Write-Host "============================================================" -ForegroundColor Cyan
-    Write-Host "  Them key vao ssh-agent?" -ForegroundColor Cyan
-    Write-Host "============================================================" -ForegroundColor Cyan
-    Write-Host ""
-    Write-Host "  " -NoNewline; Write-Host "ssh-agent" -NoNewline -ForegroundColor Yellow; Write-Host " tren Windows:"
-    Write-Host "    Dich vu OpenSSH Authentication Agent chay ngam trong Windows."
-    Write-Host "    Giu private key da unlock -> ssh/git dung ngay, khong hoi passphrase."
-    Write-Host ""
-    Write-Host "  " -NoNewline
-    Write-Host "[Y] Them vao ssh-agent" -NoNewline -ForegroundColor Green
-    Write-Host " (khuyen dung)" -ForegroundColor Green
-    Write-Host "      Script se bat dich vu va them key tu dong."
-    Write-Host "      Neu co nhieu key, moi key chay setup mot lan -> agent giu tat ca."
-    Write-Host ""
-    Write-Host "  " -NoNewline
-    Write-Host "[N] Khong them" -ForegroundColor Yellow
-    Write-Host "      Phu hop neu ban muon quan ly key thu cong (ssh-add sau)."
-    Write-Host "      Hoac neu dung passphrase va chi muon unlock khi can."
-    Write-Host ""
-    $script:AddToAgent = Prompt-YN "Them key vao ssh-agent sau khi tao?" "y"
-    if ($script:AddToAgent) {
-        Info "Se them vao ssh-agent."
-    } else {
-        Info "Bo qua. Them thu cong sau bang: ssh-add `"$script:KeyFile`""
+function Test-OpenSsh {
+    if (Get-Command ssh-keygen -ErrorAction SilentlyContinue) { return }
+    Header "Kiểm tra OpenSSH..."
+    Warn "Không tìm thấy ssh-keygen."
+    if (-not (Install-OpenSshClient)) {
+        Err "Không cài được OpenSSH Client. Cài thủ công:
+             Settings > Apps > Optional Features > Add a feature > OpenSSH Client"
     }
-    Write-Host ""
-
-    $agentLabel = if ($script:AddToAgent) { "co" } else { "khong" }
-    Write-Host "============================================================" -ForegroundColor Cyan
-    Write-Host "  Tom tat:"
-    Write-Host "    Loai key  : " -NoNewline; Write-Host $script:KeyType -ForegroundColor Yellow
-    Write-Host "    File      : " -NoNewline; Write-Host $script:KeyFile -ForegroundColor Yellow
-    Write-Host "    Comment   : " -NoNewline; Write-Host $script:KeyComment -ForegroundColor Yellow
-    Write-Host "    ssh-agent : " -NoNewline; Write-Host $agentLabel -ForegroundColor Yellow
-    Write-Host "============================================================" -ForegroundColor Cyan
-    Write-Host ""
-    $ok = Prompt-YN "Tiep tuc?" "y"
-    if (-not $ok) { Info "Da huy."; exit 0 }
-    Write-Host ""
+    Info "Đã cài OpenSSH Client."
 }
 
 # ============================================================
-# 1. Tao thu muc .ssh
+# Bước 1: Thu thập cấu hình (interactive)
+# ============================================================
+function Collect-Config {
+    $idx = Read-UiSelect "Loại key" @("ed25519|khuyên dùng", "rsa|4096-bit")
+    if ($null -eq $idx) { Err "Đã huỷ." }
+    $script:KeyType = $(if ($idx -eq 1) { "rsa" } else { "ed25519" })
+
+    $name = Read-UiText "Tên file key trong ~\.ssh\ (đặt riêng nếu có nhiều key, vd id_github)" "id_$script:KeyType"
+    $script:KeyFile = Join-Path (Join-Path $env:USERPROFILE ".ssh") $name
+
+    $script:KeyComment = Read-UiText "Comment / email cho key (vd you@example.com)" $script:KeyComment
+
+    Write-UiNote "ssh-agent là gì?" @(
+        "Service chạy ngầm, giữ private key đã unlock.",
+        "ssh/git dùng key ngay, không hỏi passphrase mỗi lần.",
+        "Nhiều key: chạy setup mỗi key một lần, agent giữ tất cả.",
+        "",
+        "$($C.Dim)Không thêm nếu muốn tự quản lý (ssh-add sau)$($C.Reset)",
+        "$($C.Dim)hoặc chỉ muốn unlock key khi cần.$($C.Reset)"
+    )
+    $script:AddToAgent = [bool](Read-UiConfirm "Thêm key vào ssh-agent sau khi tạo?")
+
+    Write-UiNote "Tóm tắt" @(
+        "Loại key  : $script:KeyType",
+        "File      : $script:KeyFile",
+        "Comment   : $(if ($script:KeyComment) { $script:KeyComment } else { '(trống)' })",
+        "ssh-agent : $(if ($script:AddToAgent) { 'có' } else { 'không' })"
+    )
+    if (-not (Read-UiConfirm "Tiếp tục?")) {
+        Complete-UiModule "Đã huỷ."
+        exit 0
+    }
+}
+
+# ============================================================
+# 2. Tạo thư mục .ssh
 # ============================================================
 function Setup-SshDir {
-    Header "Kiem tra thu muc .ssh..."
-    $sshDir = "$env:USERPROFILE\.ssh"
+    Header "Kiểm tra thư mục .ssh..."
+    $sshDir = Join-Path $env:USERPROFILE ".ssh"
     if (-not (Test-Path $sshDir)) {
-        Info "Tao thu muc $sshDir..."
         New-Item -ItemType Directory -Path $sshDir | Out-Null
-        # Dat quyen: chi owner doc/ghi
+        # Đặt quyền: chỉ owner đọc/ghi
         $acl = Get-Acl $sshDir
         $acl.SetAccessRuleProtection($true, $false)
         $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
@@ -179,23 +110,22 @@ function Setup-SshDir {
         )
         $acl.SetAccessRule($rule)
         Set-Acl $sshDir $acl
-        Info "Da tao $sshDir."
+        Info "Đã tạo $sshDir."
     } else {
-        Info "$sshDir da ton tai."
+        Info "$sshDir đã tồn tại."
     }
 }
 
 # ============================================================
-# 2. Tao SSH key pair
+# 3. Tạo SSH key pair
 # ============================================================
 function Generate-Key {
-    Header "Tao SSH key ($script:KeyType)..."
+    Header "Tạo SSH key ($script:KeyType)..."
 
     if (Test-Path $script:KeyFile) {
-        Warn "Key da ton tai: $script:KeyFile"
-        $confirm = Prompt-YN "Ghi de key cu?" "n"
-        if (-not $confirm) {
-            Info "Bo qua buoc tao key."
+        Warn "Key đã tồn tại: $script:KeyFile"
+        if (-not (Read-UiConfirm "Ghi đè key cũ? (key cũ sẽ được backup)" -DefaultNo)) {
+            Info "Bỏ qua bước tạo key, dùng key hiện có."
             return
         }
         $ts = Get-Date -Format "yyyyMMdd_HHmmss"
@@ -204,80 +134,69 @@ function Generate-Key {
         if (Test-Path "$script:KeyFile.pub") {
             Move-Item "$script:KeyFile.pub" "$backup.pub" -Force
         }
-        Warn "Key cu da duoc backup: $backup"
+        Warn "Key cũ đã được backup: $backup"
     }
-
-    Info "Dang tao key: $script:KeyFile ($script:KeyType)..."
 
     if ($script:KeyType -eq "rsa") {
-        ssh-keygen -t rsa -b 4096 -f $script:KeyFile -C $script:KeyComment -N '""'
+        $rc = Invoke-UiRun { ssh-keygen -q -t rsa -b 4096 -f $script:KeyFile -C $script:KeyComment -N '""' }
     } else {
-        ssh-keygen -t ed25519 -f $script:KeyFile -C $script:KeyComment -N '""'
+        $rc = Invoke-UiRun { ssh-keygen -q -t ed25519 -f $script:KeyFile -C $script:KeyComment -N '""' }
     }
+    if ($rc -ne 0) { Err "ssh-keygen thất bại (exit $rc)." }
 
-    Info "Da tao key thanh cong:"
-    Info "  Private key : $script:KeyFile"
-    Info "  Public key  : $script:KeyFile.pub"
+    Info "Private key : $script:KeyFile"
+    Info "Public key  : $script:KeyFile.pub"
 }
 
 # ============================================================
-# 3. Bat dich vu ssh-agent va them key
+# 4. Bật dịch vụ ssh-agent và thêm key
 # ============================================================
 function Add-ToAgent {
     if (-not $script:AddToAgent) { return }
 
-    Header "Them key vao ssh-agent..."
+    Header "Thêm key vào ssh-agent..."
 
-    # Kiem tra dich vu ssh-agent
     $svc = Get-Service -Name ssh-agent -ErrorAction SilentlyContinue
     if (-not $svc) {
-        Warn "Khong tim thay dich vu ssh-agent."
-        Warn "Hay cai OpenSSH Client qua Settings > Apps > Optional Features."
+        Warn "Không tìm thấy dịch vụ ssh-agent. Cài OpenSSH Client qua
+              Settings > Apps > Optional Features."
         return
     }
 
     if ($svc.StartType -ne "Automatic") {
-        Info "Chuyen ssh-agent sang khoi dong tu dong (Automatic)..."
         Set-Service -Name ssh-agent -StartupType Automatic
+        Info "Đã chuyển ssh-agent sang khởi động tự động."
     }
 
     if ($svc.Status -ne "Running") {
-        Info "Khoi dong dich vu ssh-agent..."
         Start-Service ssh-agent
-        Info "ssh-agent da khoi dong."
+        Info "Đã khởi động ssh-agent."
     } else {
-        Info "ssh-agent dang chay."
+        Info "ssh-agent đang chạy."
     }
 
-    # Kiem tra key da co trong agent chua
     $fingerprint = (ssh-keygen -lf "$script:KeyFile.pub" 2>$null) -split ' ' | Select-Object -Index 1
     $inAgent = (ssh-add -l 2>$null) -match [regex]::Escape($fingerprint)
     if ($inAgent) {
-        Info "Key da co trong ssh-agent."
+        Info "Key đã có trong ssh-agent."
     } else {
-        ssh-add $script:KeyFile
-        Info "Da them key vao ssh-agent."
+        $null = Invoke-UiRun { ssh-add $script:KeyFile }
+        Info "Đã thêm key vào ssh-agent."
     }
 }
 
 # ============================================================
-# 4. Cau hinh ~/.ssh/config
+# 5. Cấu hình ~/.ssh/config
 # ============================================================
 function Configure-SshConfig {
-    Header "Cau hinh .ssh\config..."
+    if (-not (Read-UiConfirm "Cấu hình .ssh\config tự động?")) { return }
 
-    $ok = Prompt-YN "Cau hinh .ssh\config tu dong?" "y"
-    if (-not $ok) {
-        Info "Bo qua buoc cau hinh .ssh\config."
-        return
-    }
-
-    $configFile = "$env:USERPROFILE\.ssh\config"
+    Header "Cấu hình .ssh\config..."
+    $configFile = Join-Path (Join-Path $env:USERPROFILE ".ssh") "config"
     $keyFileUnix = $script:KeyFile -replace '\\', '/'
 
     if (-not (Test-Path $configFile)) {
-        Info "Tao file $configFile..."
-        @"
+        $content = @"
 # SSH Config - duoc tao boi ssh/setup.ps1
 
 Host *
@@ -285,101 +204,72 @@ Host *
     IdentityFile $keyFileUnix
     ServerAliveInterval 60
     ServerAliveCountMax 3
-"@ | Set-Content $configFile -Encoding UTF8
-        Info "Da tao $configFile."
+"@
+        # UTF-8 không BOM: OpenSSH không đọc được BOM, ASCII làm hỏng tên user có dấu
+        [IO.File]::WriteAllText($configFile, $content, (New-Object System.Text.UTF8Encoding $false))
+        Info "Đã tạo $configFile."
+    } elseif ((Get-Content $configFile -Raw) -match [regex]::Escape($keyFileUnix)) {
+        Info "$configFile đã được cấu hình cho key này."
     } else {
-        if ((Get-Content $configFile -Raw) -match [regex]::Escape($script:KeyFile)) {
-            Info "$configFile da duoc cau hinh cho key nay."
-        } else {
-            Warn "$configFile da ton tai va chua co IdentityFile $script:KeyFile."
-            Warn "Them thu cong dong sau vao $configFile neu can:"
-            Write-Host ""
-            Write-Host "    IdentityFile $keyFileUnix"
-            Write-Host ""
-        }
+        Warn "$configFile đã tồn tại và chưa có key này. Thêm thủ công nếu cần:
+              IdentityFile $keyFileUnix"
     }
 
-    Write-Host ""
-    Write-Host "------------------------------------------------------------" -ForegroundColor Cyan
-    Write-Host "  Noi dung .ssh\config hien tai" -ForegroundColor Green
-    Write-Host "------------------------------------------------------------" -ForegroundColor Cyan
-    Get-Content $configFile
-    Write-Host "------------------------------------------------------------" -ForegroundColor Cyan
-    Write-Host ""
-    Write-Host "  " -NoNewline
-    Write-Host "De chinh sua them (them Host cho tung server/GitHub):" -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "    notepad  $configFile"
-    Write-Host "    code     $configFile"
-    Write-Host ""
-    Write-Host "  " -NoNewline
-    Write-Host "Vi du them Host cho GitHub:" -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "    Host github.com"
-    Write-Host "        HostName github.com"
-    Write-Host "        User git"
-    Write-Host "        AddKeysToAgent yes"
-    Write-Host "        IdentityFile $keyFileUnix"
-    Write-Host ""
-    Write-Host "  " -NoNewline
-    Write-Host "Vi du them Host cho server:" -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "    Host myserver"
-    Write-Host "        HostName 192.168.1.100"
-    Write-Host "        User ubuntu"
-    Write-Host "        AddKeysToAgent yes"
-    Write-Host "        IdentityFile $keyFileUnix"
-    Write-Host "        Port 22"
-    Write-Host ""
+    Write-UiNote ".ssh\config" @(Get-Content $configFile)
+    Write-UiNote "Thêm Host cho GitHub / server (notepad $configFile)" @(
+        "Host github.com",
+        "    HostName github.com",
+        "    User git",
+        "    IdentityFile $keyFileUnix",
+        "",
+        "Host myserver",
+        "    HostName 192.168.1.100",
+        "    User ubuntu",
+        "    Port 22",
+        "    IdentityFile $keyFileUnix"
+    )
 }
 
 # ============================================================
-# 5. In public key
+# 6. In public key
 # ============================================================
 function Print-Pubkey {
     $pubkeyFile = "$script:KeyFile.pub"
 
+    Header "Public key $($G.Dash) copy và thêm vào GitHub / server"
     if (-not (Test-Path $pubkeyFile)) {
-        Warn "Khong tim thay public key: $pubkeyFile"
+        Warn "Không tìm thấy public key: $pubkeyFile"
         return
     }
 
-    $pubkey = Get-Content $pubkeyFile -Raw
-    $pubkey = $pubkey.Trim()
+    $pubkey = (Get-Content $pubkeyFile -Raw).Trim()
 
-    Write-Host ""
-    Write-Host "============================================================"
-    Write-Host "  PUBLIC KEY - Copy va them vao GitHub / server"
-    Write-Host "============================================================"
-    Write-Host $pubkey
-    Write-Host "============================================================"
-    Write-Host ""
-    Write-Host "  Xem lai bat cu luc nao:" -ForegroundColor Yellow
-    Write-Host "    type $pubkeyFile"
-    Write-Host "    Get-Content $pubkeyFile"
-    Write-Host ""
+    # In nguyên dòng, không có viền │ để copy cho sạch
+    Write-Ui ""
+    Write-Ui $pubkey
+    Write-Ui ""
 
     try {
         Set-Clipboard -Value $pubkey
-        Info "Public key da duoc copy vao clipboard."
+        Info "Đã copy vào clipboard."
     } catch {
-        Warn "Khong the copy vao clipboard tu dong. Copy thu cong tu tren."
+        Warn "Không copy được vào clipboard, copy thủ công từ trên."
     }
 
-    Info "Them vao GitHub  : https://github.com/settings/keys"
-    Info "Them vao server  : type $pubkeyFile | ssh user@host `"cat >> ~/.ssh/authorized_keys`""
+    Info "Xem lại        : Get-Content $pubkeyFile"
+    Info "Thêm vào GitHub: https://github.com/settings/keys"
+    Info "Thêm vào server: type $pubkeyFile | ssh user@host `"cat >> ~/.ssh/authorized_keys`""
 }
 
 # ============================================================
 # Main
 # ============================================================
-Header "SSH Key Setup (Windows)"
+Start-UiModule "SSH key (Windows)"
+Test-OpenSsh
 Collect-Config
 Setup-SshDir
 Generate-Key
 Add-ToAgent
 Configure-SshConfig
 Print-Pubkey
-
-Write-Host ""
-Info "SSH key setup hoan tat!"
+Complete-UiModule "SSH key setup hoàn tất!"

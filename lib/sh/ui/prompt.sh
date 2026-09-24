@@ -6,6 +6,7 @@
 
 # Collapsed view of an answered prompt
 _ui_answered() {
+    _ui_block_begin
     printf '%s◇%s  %s\n%s  %s%s%s\n%s\n' "$UI_GREEN" "$UI_RESET" "$1" \
         "$UI_BAR" "$UI_DIM" "$2" "$UI_RESET" "$UI_BAR"
 }
@@ -24,7 +25,20 @@ ui_multiselect() {
         n=$((n + 1))
     done
 
-    local cur=0 drawn=0 key i count box text footer
+    local cur=0 drawn=0 key i count box text footer names
+
+    # No terminal: keep the default selection
+    if ! ui_has_tty; then
+        UI_RESULT=(); names=""
+        for ((i = 0; i < n; i++)); do
+            if [ "${sel[i]}" -eq 1 ]; then
+                UI_RESULT+=("$i"); names+="${names:+, }${labels[i]}"
+            fi
+        done
+        _ui_answered "$question" "${names:-(không chọn)}"
+        return 0
+    fi
+
     local help="↑/↓ di chuyển · space chọn · a chọn tất cả · enter xác nhận"
     footer="$help"
     ui_cursor_hide
@@ -85,7 +99,7 @@ ui_multiselect() {
     _ui_clear_lines "$drawn"
     ui_cursor_show
     UI_RESULT=()
-    local names=""
+    names=""
     for ((i = 0; i < n; i++)); do
         if [ "${sel[i]}" -eq 1 ]; then
             UI_RESULT+=("$i")
@@ -97,7 +111,7 @@ ui_multiselect() {
 
 # Single select
 # Usage: ui_select "Question" "label|hint" "label|hint" ...
-# Result: UI_ANSWER=index. Returns 1 when cancelled.
+# Result: UI_ANSWER=index (first option without a terminal). Returns 1 when cancelled.
 ui_select() {
     local question="$1"; shift
     local labels=() hints=()
@@ -109,6 +123,13 @@ ui_select() {
     done
 
     local cur=0 drawn=0 key i text
+
+    if ! ui_has_tty; then
+        UI_ANSWER=0
+        _ui_answered "$question" "${labels[0]}"
+        return 0
+    fi
+
     ui_cursor_hide
     while :; do
         _ui_clear_lines "$drawn"
@@ -150,6 +171,11 @@ ui_select() {
 ui_confirm() {
     local question="$1" yes=1 drawn=0 key yes_txt no_txt
     [ "${2:-y}" = "n" ] && yes=0
+
+    if ! ui_has_tty; then
+        if [ "$yes" -eq 1 ]; then _ui_answered "$question" "Có"; return 0; fi
+        _ui_answered "$question" "Không"; return 1
+    fi
 
     ui_cursor_hide
     while :; do
@@ -195,6 +221,13 @@ ui_confirm() {
 # Usage: ui_text "Question" [default]  -> UI_ANSWER
 ui_text() {
     local question="$1" default="${2:-}" reply
+
+    if ! ui_has_tty; then
+        UI_ANSWER="$default"
+        _ui_answered "$question" "${default:-(trống)}"
+        return 0
+    fi
+
     ui_active "$question"
     if [ -n "$default" ]; then
         printf '%s│%s  %s(%s)%s ' "$UI_CYAN" "$UI_RESET" "$UI_DIM" "$default" "$UI_RESET"

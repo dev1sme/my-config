@@ -1,23 +1,28 @@
-# ============================================================
+﻿# ============================================================
 # VS Code Setup Script - Windows
-# Cai dat extensions va cau hinh settings cho VS Code
-# Chay: PowerShell 5.1+ hoac PowerShell 7+
+# Cài đặt extensions và cấu hình settings cho VS Code
+# Chạy: PowerShell 5.1+ hoặc PowerShell 7+
+# File lưu UTF-8 with BOM để PowerShell 5.1 đọc đúng tiếng Việt.
 # ============================================================
 
 #Requires -Version 5.1
 
 $ErrorActionPreference = "Stop"
 
-# ============================================================
-# Colors / helpers
-# ============================================================
-function Info   { param($msg) Write-Host "[INFO] $msg" -ForegroundColor Green }
-function Warn   { param($msg) Write-Host "[WARN] $msg" -ForegroundColor Yellow }
-function Err    { param($msg) Write-Host "[ERROR] $msg" -ForegroundColor Red; exit 1 }
-function Header { param($msg) Write-Host "[====] $msg" -ForegroundColor Cyan }
+$ScriptDir      = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$ExtensionsFile = Join-Path $ScriptDir "extensions.txt"
+$SettingsFile   = Join-Path $ScriptDir "setting.json"
+
+. (Join-Path $ScriptDir '..\lib\ps\UI.ps1')
+. (Join-Path $ScriptDir '..\lib\ps\Pkg.ps1')
+
+function Info   { param($msg) Write-UiLog $msg }
+function Warn   { param($msg) Write-UiLogWarn $msg }
+function Err    { param($msg) Stop-UiFail $msg }
+function Header { param($msg) Write-UiSection $msg }
 
 # ============================================================
-# Kiem tra he dieu hanh
+# Kiểm tra hệ điều hành
 # ============================================================
 $_os = if ($PSVersionTable.PSVersion.Major -ge 6) {
     if     ($IsWindows) { "Windows" }
@@ -28,16 +33,10 @@ $_os = if ($PSVersionTable.PSVersion.Major -ge 6) {
 
 switch ($_os) {
     "Windows" { }  # OK
-    "macOS"   { Err "Ban dang dung macOS. Hay chay: ./vscode/setup_mac.sh" }
-    "Linux"   { Err "Ban dang dung Linux. Hay chay: ./vscode/setup.sh" }
-    default   { Err "He dieu hanh khong duoc ho tro: $_os" }
+    "macOS"   { Err "Bạn đang dùng macOS. Hãy chạy: ./vscode/setup_mac.sh" }
+    "Linux"   { Err "Bạn đang dùng Linux. Hãy chạy: ./vscode/setup.sh" }
+    default   { Err "Hệ điều hành không được hỗ trợ: $_os" }
 }
-
-$ScriptDir    = Split-Path -Parent $MyInvocation.MyCommand.Definition
-$ExtensionsFile = Join-Path $ScriptDir "extensions.txt"
-$SettingsFile   = Join-Path $ScriptDir "setting.json"
-
-. (Join-Path $ScriptDir '..\lib\ps\Pkg.ps1')
 
 # ============================================================
 # VS Code settings path (Windows)
@@ -47,9 +46,9 @@ function Get-VscodeSettingsDir {
 }
 
 # ============================================================
-# 1. Kiem tra VS Code da cai chua
+# 1. Kiểm tra VS Code đã cài chưa
 # ============================================================
-# Duong dan VS Code khi cai bang .exe (mac dinh)
+# Đường dẫn VS Code khi cài bằng .exe (mặc định)
 $VscodePaths = @(
     "$env:LOCALAPPDATA\Programs\Microsoft VS Code\bin\code.cmd",
     "$env:ProgramFiles\Microsoft VS Code\bin\code.cmd",
@@ -58,150 +57,133 @@ $VscodePaths = @(
 
 function Check-Vscode {
     param([switch]$AfterInstall)
-    Header "Kiem tra VS Code..."
+    Header "Kiểm tra VS Code..."
 
     if (Get-Command code -ErrorAction SilentlyContinue) {
-        $ver = (code --version | Select-Object -First 1)
-        Info "VS Code da duoc cai dat: $ver"
+        Info "VS Code đã được cài đặt: $(code --version | Select-Object -First 1)"
         return
     }
 
-    # Cai bang .exe nhung chua co 'code' trong PATH
-    $found = $null
-    foreach ($p in $VscodePaths) {
-        if (Test-Path $p) {
-            $found = $p
-            break
-        }
-    }
+    # Cài bằng .exe nhưng chưa có 'code' trong PATH
+    $found = $VscodePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
 
     if ($found) {
         $binDir = Split-Path $found
-        Warn "VS Code da cai ($binDir) nhung lenh 'code' chua co trong PATH."
-        Info "Dang them vao PATH..."
+        Warn "VS Code đã cài ($binDir) nhưng lệnh 'code' chưa có trong PATH."
 
-        # Them vao PATH cua User (persistent qua reboot)
+        # Thêm vào PATH của User (persistent qua reboot)
         $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
         if ($userPath -notlike "*$binDir*") {
             [Environment]::SetEnvironmentVariable("Path", "$userPath;$binDir", "User")
-            Info "Da them '$binDir' vao User PATH (persistent)."
+            Info "Đã thêm '$binDir' vào User PATH."
         }
 
-        # Them vao PATH cho session hien tai
+        # Thêm vào PATH cho session hiện tại
         $env:Path = "$binDir;$env:Path"
 
         if (Get-Command code -ErrorAction SilentlyContinue) {
-            $ver = (code --version | Select-Object -First 1)
-            Info "VS Code: $ver"
+            Info "VS Code: $(code --version | Select-Object -First 1)"
         } else {
-            Warn "Khong the xac nhan lenh 'code'. Thu dong lai PowerShell."
+            Warn "Không xác nhận được lệnh 'code'. Thử đóng rồi mở lại PowerShell."
         }
     } elseif (-not $AfterInstall) {
-        Warn "VS Code chua duoc cai dat."
+        Warn "VS Code chưa được cài đặt."
         if (Install-WingetPackage "Microsoft.VisualStudioCode") {
-            Info "Da cai VS Code qua winget."
+            Info "Đã cài VS Code qua winget."
             Check-Vscode -AfterInstall
             return
         }
-        Err "Khong cai duoc VS Code qua winget.
-       Download: https://code.visualstudio.com/download"
+        Err "Không cài được VS Code qua winget.
+             Download: https://code.visualstudio.com/download"
     } else {
-        Err "VS Code chua duoc cai dat. Hay cai VS Code truoc khi chay script nay.
-       Download: https://code.visualstudio.com/download
-       Hoac qua winget: winget install Microsoft.VisualStudioCode
-       
-       Neu da cai bang .exe, thu dong lai PowerShell de PATH duoc cap nhat."
+        Err "Không tìm thấy VS Code sau khi cài. Đóng rồi mở lại PowerShell, chạy lại script."
     }
 }
 
 # ============================================================
-# 2. Cai dat Extensions
+# 2. Cài đặt Extensions
 # ============================================================
 function Install-Extensions {
-    Header "Cai dat VS Code Extensions..."
+    Header "Cài đặt VS Code Extensions..."
 
     if (-not (Test-Path $ExtensionsFile)) {
-        Err "Khong tim thay file $ExtensionsFile"
+        Err "Không tìm thấy file $ExtensionsFile"
     }
 
-    $total     = 0
-    $installed = 0
-    $failed    = 0
-    $skipped   = 0
+    $total = 0; $installed = 0; $failed = 0; $skipped = 0
 
-    # Doc danh sach extensions da cai
+    # Danh sách extensions đã cài
     $currentExtensions = @(code --list-extensions 2>$null)
 
-    $lines = Get-Content $ExtensionsFile
-    foreach ($line in $lines) {
+    foreach ($line in (Get-Content $ExtensionsFile)) {
         $ext = $line.Trim()
-        # Bo qua dong trong va comment
+        # Bỏ qua dòng trống và comment
         if ([string]::IsNullOrWhiteSpace($ext) -or $ext.StartsWith("#")) { continue }
 
         $total++
 
-        # Kiem tra extension da cai chua (case-insensitive)
+        # -contains so sánh không phân biệt hoa thường
         if ($currentExtensions -contains $ext) {
-            Info ([char]0x2713 + " Da co: $ext")
+            Info "$($C.Dim)$([char]0x2713) Đã có: $ext$($C.Reset)"
             $skipped++
+            continue
+        }
+
+        # Lệnh native không throw khi lỗi: kiểm tra exit code
+        $ErrorActionPreference = 'Continue'
+        $null = code --install-extension $ext --force 2>&1
+        $rc = $LASTEXITCODE
+        $ErrorActionPreference = 'Stop'
+
+        if ($rc -eq 0) {
+            Info "$($C.Green)$($G.Check)$($C.Reset) Đã cài: $ext"
+            $installed++
         } else {
-            Write-Host -NoNewline "  Dang cai: $ext ... "
-            try {
-                $null = code --install-extension $ext --force 2>&1
-                Write-Host "OK" -ForegroundColor Green
-                $installed++
-            } catch {
-                Write-Host "FAILED" -ForegroundColor Red
-                $failed++
-            }
+            Write-UiLogError "Lỗi: $ext (exit $rc)"
+            $failed++
         }
     }
 
-    Write-Host ""
-    Info "Tong ket Extensions:"
-    Write-Host "  Tong: $total | Da co: $skipped | Moi cai: $installed | Loi: $failed"
+    Info "Tổng: $total $($G.Dot) Đã có: $skipped $($G.Dot) Mới cài: $installed $($G.Dot) Lỗi: $failed"
 }
 
 # ============================================================
-# 3. Cau hinh Settings
+# 3. Cấu hình Settings
 # ============================================================
 function Setup-Settings {
-    Header "Cau hinh VS Code Settings..."
+    Header "Cấu hình VS Code Settings..."
 
     if (-not (Test-Path $SettingsFile)) {
-        Err "Khong tim thay file $SettingsFile"
+        Err "Không tìm thấy file $SettingsFile"
     }
 
     $vscodeDir = Get-VscodeSettingsDir
     $targetSettings = Join-Path $vscodeDir "settings.json"
 
-    # Tao thu muc settings neu chua co
     if (-not (Test-Path $vscodeDir)) {
         New-Item -ItemType Directory -Path $vscodeDir -Force | Out-Null
     }
 
-    # Backup settings cu neu co
+    # Backup settings cũ nếu có
     if (Test-Path $targetSettings) {
-        $ts = Get-Date -Format "yyyyMMdd_HHmmss"
-        $backup = "$targetSettings.backup.$ts"
-        Warn "Backup settings cu -> $backup"
+        $backup = "$targetSettings.backup.$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+        Warn "Backup settings cũ -> $backup"
         Copy-Item $targetSettings $backup
     }
 
-    # Copy settings moi
     Copy-Item $SettingsFile $targetSettings -Force
-    Info "Settings da duoc cap nhat tai: $targetSettings"
+    Info "Settings đã được cập nhật tại: $targetSettings"
 }
 
 # ============================================================
-# 4. Export extensions hien tai (tien ich)
+# 4. Export extensions hiện tại (tiện ích)
 # ============================================================
 function Export-CurrentExtensions {
-    Header "Export danh sach extensions hien tai..."
+    Header "Export danh sách extensions hiện tại..."
     $exportFile = Join-Path $ScriptDir "extensions.txt"
-    code --list-extensions | Set-Content $exportFile -Encoding UTF8
+    code --list-extensions | Set-Content $exportFile -Encoding ASCII
     $count = (Get-Content $exportFile).Count
-    Info "Da export $count extensions vao: $exportFile"
+    Info "Đã export $count extensions vào: $exportFile"
 }
 
 # ============================================================
@@ -212,53 +194,34 @@ function Show-Help {
     Write-Host "Usage: .\setup.ps1 [OPTION]"
     Write-Host ""
     Write-Host "Options:"
-    Write-Host "  --all          Cai dat extensions + settings (mac dinh)"
-    Write-Host "  --extensions   Chi cai dat extensions"
-    Write-Host "  --settings     Chi cau hinh settings"
-    Write-Host "  --export       Export danh sach extensions hien tai"
-    Write-Host "  --help         Hien thi help"
+    Write-Host "  --all          Cài đặt extensions + settings (mặc định)"
+    Write-Host "  --extensions   Chỉ cài đặt extensions"
+    Write-Host "  --settings     Chỉ cấu hình settings"
+    Write-Host "  --export       Export danh sách extensions hiện tại"
+    Write-Host "  --help         Hiển thị help"
     Write-Host ""
 }
 
-# ============================================================
-# Main
-# ============================================================
-Write-Host "=========================================="
-Write-Host "  VS Code Setup Script (Windows)"
-Write-Host "=========================================="
-Write-Host ""
-
-Check-Vscode
-
 $action = if ($args.Count -gt 0) { $args[0] } else { "--all" }
 
+if ($action -eq "--help" -or $action -eq "-h") {
+    Show-Help
+    exit 0
+}
+
+Start-UiModule "VS Code (Windows)"
+Check-Vscode
+
 switch ($action) {
-    "--all" {
-        Install-Extensions
-        Write-Host ""
-        Setup-Settings
-    }
-    "--extensions" {
-        Install-Extensions
-    }
-    "--settings" {
-        Setup-Settings
-    }
-    "--export" {
-        Export-CurrentExtensions
-    }
-    { $_ -eq "--help" -or $_ -eq "-h" } {
-        Show-Help
-        exit 0
-    }
+    "--all"        { Install-Extensions; Setup-Settings }
+    "--extensions" { Install-Extensions }
+    "--settings"   { Setup-Settings }
+    "--export"     { Export-CurrentExtensions }
     default {
-        Warn "Option khong hop le: $action"
+        Warn "Option không hợp lệ: $action"
         Show-Help
         exit 1
     }
 }
 
-Write-Host ""
-Write-Host "=========================================="
-Info "Hoan tat! Khoi dong lai VS Code de ap dung thay doi."
-Write-Host "=========================================="
+Complete-UiModule "Hoàn tất! Khởi động lại VS Code để áp dụng thay đổi."

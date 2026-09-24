@@ -5,6 +5,9 @@
 
 $script:Results = @()
 
+# Module scripts check this to skip their own intro/outro (see Start-UiModule)
+$env:MY_CONFIG_INSTALLER = '1'
+
 function New-LogDir {
     if ($env:LOCALAPPDATA) {
         $base = Join-Path $env:LOCALAPPDATA 'my-config/logs'
@@ -64,11 +67,9 @@ function Write-MyConfigSummary([string]$LogDir) {
     $summary += ''
     $summary += "$($C.Dim)Logs: $LogDir$($C.Reset)"
     Write-UiNote 'Kết quả' $summary
-    Write-UiBar
 
     if ($next.Count -gt 0) {
         Write-UiNote 'Bước tiếp theo' $next
-        Write-UiBar
     }
     return $failed
 }
